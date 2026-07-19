@@ -49,9 +49,9 @@ describe("buildNotifyScript", () => {
 describe("sendNotification", () => {
   const n = { kind: "finished" as const, title: "t", message: "m" };
 
-  it("no-ops on non-darwin", () => {
+  it("no-ops on unsupported platforms", () => {
     const run = vi.fn();
-    expect(sendNotification(n, { run, platform: "linux" })).toBe(false);
+    expect(sendNotification(n, { run, platform: "win32" })).toBe(false);
     expect(run).not.toHaveBeenCalled();
   });
 
@@ -59,6 +59,13 @@ describe("sendNotification", () => {
     const run = vi.fn();
     expect(sendNotification(n, { run, platform: "darwin" })).toBe(true);
     expect(run).toHaveBeenCalledOnce();
+    expect(run.mock.calls[0]?.[0]).toMatchObject({ file: "osascript" });
+  });
+
+  it("runs notify-send on linux", () => {
+    const run = vi.fn();
+    expect(sendNotification(n, { run, platform: "linux" })).toBe(true);
+    expect(run.mock.calls[0]?.[0]).toEqual({ file: "notify-send", args: ["t", "m"] });
   });
 
   it("never throws if the runner fails", () => {

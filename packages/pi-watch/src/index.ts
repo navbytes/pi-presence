@@ -6,29 +6,33 @@ import {
   loadAllAndReconcile,
   watchLive,
 } from "@pi-presence/shared";
+import { performFocus, resolveSession } from "./commands.js";
 import { renderView } from "./render.js";
 
 // ---------------------------------------------------------------------------
 // pi-watch: a standalone terminal reader for the pi-presence live directory.
-// Run it in any terminal to see every pi session grouped by state, live.
 //
-//   tsx packages/pi-watch/src/index.ts          # live TUI
-//   tsx packages/pi-watch/src/index.ts --once    # print once and exit
-//   tsx packages/pi-watch/src/index.ts --json     # stream view-model JSON
+//   pi-watch                 # live TUI
+//   pi-watch --once           # print once and exit
+//   pi-watch --json           # stream view-model JSON
+//   pi-watch focus <query>    # focus a session's terminal (or copy its resume)
+//   pi-watch gc [--all]       # prune dormant state files
 // ---------------------------------------------------------------------------
 
 interface Options {
   once: boolean;
   json: boolean;
   color: boolean;
+  all: boolean;
   dir: string;
 }
 
-function parseArgs(argv: string[]): Options {
+function parseOptions(argv: string[]): Options {
   const opts: Options = {
     once: argv.includes("--once"),
     json: argv.includes("--json"),
     color: !argv.includes("--no-color") && Boolean(process.stdout.isTTY),
+    all: argv.includes("--all"),
     dir: getLiveDir(),
   };
   const dirIdx = argv.indexOf("--dir");
@@ -36,24 +40,65 @@ function parseArgs(argv: string[]): Options {
   return opts;
 }
 
+function positionals(argv: string[]): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i] as string;
+    if (a === "--dir") {
+      i++; // skip its value
+      continue;
+    }
+    if (a.startsWith("--")) continue;
+    out.push(a);
+  }
+  return out;
+}
+
 function clearScreen(): void {
   process.stdout.write("\x1b[H\x1b[2J\x1b[3J");
 }
 
-function main(): void {
-  const opts = parseArgs(process.argv.slice(2));
-
-  if (opts.once) {
-    const snaps = loadAllAndReconcile(opts.dir, { gcTtlMs: DEFAULT_GC_TTL_MS });
-    const vm = buildViewModel(snaps);
-    if (opts.json) {
-      process.stdout.write(`${JSON.stringify(vm, null, 2)}\n`);
-    } else {
-      process.stdout.write(`${renderView(vm, { color: opts.color }).join("\n")}\n`);
-    }
-    return;
+function runFocus(query: string, opts: Options): number {
+  const vm = buildViewModel(loadAllAndReconcile(opts.dir));
+  const res = resolveSession(vm, query);
+  if (res.kind === "none") {
+    process.stderr.write(`no session matching "${query}"\n`);
+    return 1;
   }
+  if (res.kind === "ambiguous") {
+    process.stderr.write(`"${query}" matches multiple sessions:\n`);
+    for (const s of res.matches) process.stderr.write(`  ${s.name}  #${s.id}  ${s.cwd}\n`);
+    return 1;
+  }
+  const outcome = performFocus(res.session);
+  if (outcome.focused) {
+    process.stdout.write(`focused ${res.session.name} (${outcome.strategy})\n`);
+  } else if (outcome.copied) {
+    process.stdout.write(
+      `could not focus; copied resume command to clipboard:\n  ${outcome.resume}\n`,
+    );
+  } else {
+    process.stdout.write(`could not focus. resume with:\n  ${outcome.resume}\n`);
+  }
+  return 0;
+}
 
+function runGc(opts: Options): number {
+  const before = loadAllAndReconcile(opts.dir).length;
+  loadAllAndReconcile(opts.dir, { gcTtlMs: opts.all ? 1 : DEFAULT_GC_TTL_MS });
+  const after = loadAllAndReconcile(opts.dir).length;
+  const pruned = Math.max(0, before - after);
+  process.stdout.write(`pruned ${pruned} dormant session file${pruned === 1 ? "" : "s"}\n`);
+  return 0;
+}
+
+function runOnce(opts: Options): void {
+  const vm = buildViewModel(loadAllAndReconcile(opts.dir, { gcTtlMs: DEFAULT_GC_TTL_MS }));
+  if (opts.json) process.stdout.write(`${JSON.stringify(vm, null, 2)}\n`);
+  else process.stdout.write(`${renderView(vm, { color: opts.color }).join("\n")}\n`);
+}
+
+function runLive(opts: Options): void {
   const dispose = watchLive(
     opts.dir,
     (snaps) => {
@@ -68,7 +113,6 @@ function main(): void {
     },
     { gcTtlMs: DEFAULT_GC_TTL_MS },
   );
-
   const shutdown = () => {
     dispose();
     process.stdout.write("\n");
@@ -76,6 +120,25 @@ function main(): void {
   };
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
+}
+
+function main(): void {
+  const argv = process.argv.slice(2);
+  const opts = parseOptions(argv);
+  const [command] = positionals(argv);
+
+  if (command === "focus") {
+    const query = positionals(argv).slice(1).join(" ");
+    process.exit(runFocus(query, opts));
+  }
+  if (command === "gc") {
+    process.exit(runGc(opts));
+  }
+  if (opts.once) {
+    runOnce(opts);
+    return;
+  }
+  runLive(opts); // streams JSON when --json is set
 }
 
 main();
