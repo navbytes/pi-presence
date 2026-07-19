@@ -1,0 +1,22 @@
+{
+  "$comment": "ASSUMPTION: Vee has no public plugin manifest spec yet. These field names are a best guess and MUST be reconciled against the real Vee API before shipping. Only the stdio JSON-RPC + JSON Patch contract in src/ is stable.",
+  "id": "pi-presence",
+  "name": "pi Presence",
+  "version": "0.1.0",
+  "description": "Menubar view of every pi session: needs-you / running / idle / dormant, with click-to-focus.",
+  "entry": "src/index.ts",
+  "runtime": "node",
+  "transport": "stdio-jsonrpc",
+  "menubar": {
+    "icon": "terminal",
+    "badge": "counts.needsYou"
+  },
+  "capabilities": {
+    "notifications": ["presence/replace", "presence/patch"],
+    "requests": ["presence/focus", "presence/resume"]
+  },
+  "hotkey": {
+    "default": "cmd+shift+p"
+  },
+  "permissions": ["read-live-dir", "spawn-focus-scripts"]
+}

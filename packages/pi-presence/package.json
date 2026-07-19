@@ -1,0 +1,46 @@
+{
+  "name": "pi-presence",
+  "version": "0.1.0",
+  "description": "Ambient session-status for the pi coding agent: per-session state files, self-labeling terminal tabs, and a menubar/TUI view of every session (needs-you / running / dormant).",
+  "keywords": [
+    "pi-package",
+    "pi",
+    "pi-extension",
+    "status",
+    "menubar",
+    "presence",
+    "terminal-title"
+  ],
+  "type": "module",
+  "license": "MIT",
+  "author": "Naveen (navbytes)",
+  "homepage": "https://github.com/navbytes/pi-presence#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/navbytes/pi-presence.git",
+    "directory": "packages/pi-presence"
+  },
+  "bugs": {
+    "url": "https://github.com/navbytes/pi-presence/issues"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "files": ["extensions", "src", "permission-gate", "README.md", "LICENSE", "!**/*.test.ts"],
+  "exports": {
+    ".": "./extensions/index.ts"
+  },
+  "pi": {
+    "extensions": ["./extensions/index.ts"],
+    "image": "https://raw.githubusercontent.com/navbytes/pi-presence/main/assets/demo.png"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "^0.80.10"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "release-type": "node",
+  "separate-pull-requests": false,
+  "packages": {
+    "packages/pi-presence": {
+      "package-name": "pi-presence",
+      "changelog-path": "CHANGELOG.md",
+      "release-type": "node"
+    }
+  }
+}
