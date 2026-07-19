@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1
+
+Maintenance / version-alignment release — no functional changes to the extension
+since 0.1.0. A Vee / xbar / SwiftBar menu-bar plugin is now available in the repo
+(`packages/vee-plugin`) as a copyable script.
+
 ## 0.1.0
 
 ### Added
