@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { param, renderMenu, renderMissingCli } from "./pi-presence.5s.js";
+import { param, renderMenu, renderMissingCli, resolveBin } from "./pi-presence.5s.js";
 
 function session(overrides: Record<string, unknown> = {}) {
   return {
@@ -92,5 +92,30 @@ describe("renderMissingCli", () => {
     const text = renderMissingCli().join("\n");
     expect(text).toContain("pi-presence-watch not found");
     expect(text).toContain("npm param0=i param1=-g param2=pi-presence-watch");
+  });
+});
+
+describe("resolveBin", () => {
+  it("honors the PI_PRESENCE_WATCH_BIN override", () => {
+    expect(
+      resolveBin("pi-presence-watch", { PI_PRESENCE_WATCH_BIN: "/custom/pi-presence-watch" }),
+    ).toBe("/custom/pi-presence-watch");
+  });
+
+  it("falls back to the bare name when nothing resolves", () => {
+    expect(resolveBin("definitely-not-a-real-bin-xyz", { PATH: "" })).toBe(
+      "definitely-not-a-real-bin-xyz",
+    );
+  });
+});
+
+describe("renderMenu with resolved absolute bins", () => {
+  it("uses absolute bin paths in click actions and quotes spaces", () => {
+    const text = renderMenu(vm([session({ sessionFile: "/x/web.jsonl" })]), {
+      watchBin: "/opt/homebrew/bin/pi-presence-watch",
+      piBin: "/Users/a b/bin/pi",
+    }).join("\n");
+    expect(text).toContain("shell=/opt/homebrew/bin/pi-presence-watch param0=focus");
+    expect(text).toContain('shell="/Users/a b/bin/pi" param0=--session');
   });
 });
