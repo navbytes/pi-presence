@@ -35,6 +35,12 @@ cadence.
 
 ## Troubleshooting
 
-If clicking an item does nothing, Vee's GUI `PATH` may not include your npm
-global bin. Replace `pi-presence-watch` / `pi` in the script with absolute paths
-(find them with `which pi-presence-watch` and `which pi`).
+GUI apps like Vee run with a minimal `PATH` that usually omits the npm global
+bin, so the plugin resolves `pi-presence-watch` / `pi` to absolute paths itself
+(it checks `$PI_PRESENCE_WATCH_BIN`, the directory of the Node running the
+plugin, `$PATH`, and common install dirs like `/opt/homebrew/bin`).
+
+If you still see **"pi-presence-watch not found"**, set the absolute path
+explicitly: run `which pi-presence-watch`, then set `PI_PRESENCE_WATCH_BIN` to
+that value in the plugin's settings (Vee reads the `<xbar.var>`), or export it in
+the environment Vee launches from.
