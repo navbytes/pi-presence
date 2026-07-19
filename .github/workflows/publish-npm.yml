@@ -10,10 +10,11 @@ on:
 
 permissions:
   contents: read
+  id-token: write # OIDC token for npm trusted publishing (no stored NPM_TOKEN)
 
 jobs:
   publish:
-    name: publish to npm
+    name: publish to npm (trusted publishing)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -24,14 +25,16 @@ jobs:
           cache: npm
           registry-url: "https://registry.npmjs.org"
       - run: npm ci
+      # Trusted publishing (OIDC) + provenance require npm >= 11.5.1.
+      - run: npm install -g npm@latest
       - run: npm run check
       - run: npm run build
 
       - name: publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          FLAG=""
+          # On a real run, OIDC trusted publishing authenticates automatically
+          # (no NPM_TOKEN) and --provenance attaches a provenance statement.
+          FLAG="--provenance"
           if [ "${{ inputs.dry-run }}" = "true" ]; then
             FLAG="--dry-run"
             echo "::notice::DRY RUN — packing and validating, nothing will be published"
