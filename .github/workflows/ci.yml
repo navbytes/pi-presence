@@ -39,6 +39,9 @@ jobs:
       - name: Test
         run: npm test
 
+      - name: Build (bundle the reader CLI)
+        run: npm run build
+
       - name: Audit (production deps)
         run: npm audit --omit=dev --audit-level=high
         continue-on-error: true

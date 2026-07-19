@@ -29,6 +29,7 @@ jobs:
           fi
 
       - run: npm run check
+      - run: npm run build
 
       - name: build release notes from CHANGELOG
         run: |

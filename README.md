@@ -25,8 +25,8 @@ into a glanceable list or a menubar item.
 | Package | What it is | Published |
 | --- | --- | --- |
 | [`pi-presence`](packages/pi-presence) | The pi extension: writes state files, labels tabs, consumes/produces `herdr:blocked`, optional notifications. | npm |
-| [`@pi-presence/shared`](packages/shared) | Zero-pi-dependency reader library: schema, liveness, watch/reconcile, view model, JSON Patch, terminal focus. | workspace-only |
-| [`pi-watch`](packages/pi-watch) | Standalone terminal reader — a live grouped list of all sessions. | no (run via `tsx`) |
+| [`@pi-presence/shared`](packages/shared) | Zero-pi-dependency reader library: schema, liveness, watch/reconcile, view model, JSON Patch, terminal focus. | workspace-only (bundled into the reader) |
+| [`pi-presence-watch`](packages/pi-watch) | Standalone terminal reader — a live grouped list of all sessions, plus `focus`/`gc` commands. | npm |
 | [`vee-pi-presence`](packages/vee-pi-presence) | Vee menubar plugin: JSON-RPC + JSON Patch over stdio, with click-to-focus. | no |
 
 ## Install the extension
@@ -40,8 +40,10 @@ On the next session start you'll get a self-labeling tab and a state file per
 session. To watch every session in another terminal:
 
 ```sh
-npx tsx packages/pi-watch/src/index.ts        # live TUI
-npx tsx packages/pi-watch/src/index.ts --once  # print once
+npx pi-presence-watch            # live TUI
+npx pi-presence-watch --once      # print once
+npx pi-presence-watch focus <q>   # focus a session's terminal (or copy its resume)
+npx pi-presence-watch gc          # prune dormant state files
 ```
 
 ## State file schema
@@ -173,23 +175,26 @@ dependency), enforced by `npm run check:schema-sync`.
 
 ## Publishing
 
-Only `pi-presence` is published (the readers stay workspace-private). Publishing
-is token-based (no npm provenance), so it works from a private source repo.
+Two packages publish to npm: `pi-presence` (the extension) and
+`pi-presence-watch` (the reader CLI, bundled so it has no runtime deps). The
+`@pi-presence/shared` library is bundled into the reader, not published.
+Publishing is token-based (no npm provenance), so it works regardless of repo
+visibility. Add an npm automation token as the `NPM_TOKEN` repo secret first.
 
 1. Bump `version` in `packages/pi-presence/package.json` and add a matching
    `## <version>` section to `packages/pi-presence/CHANGELOG.md`.
 2. Tag it: `git tag vX.Y.Z && git push --tags`. The `release` workflow verifies
-   the tag matches the package version, runs `npm run check`, and creates the
-   GitHub Release (notes from the CHANGELOG section).
+   the tag matches the package version, runs `npm run check` + `npm run build`,
+   and creates the GitHub Release (notes from the CHANGELOG section).
 3. Publish to npm: run the `publish-npm` workflow (leave `dry-run` on first to
-   pack & validate, then run it with `dry-run` off). It uses the `NPM_TOKEN`
-   secret.
+   pack & validate both packages, then run it with `dry-run` off).
 
-To publish locally without CI (e.g. while Actions runners are unavailable):
+To publish locally without CI:
 
 ```sh
-npm ci && npm run check
-npm publish --workspace pi-presence --access public   # add --dry-run to validate
+npm ci && npm run check && npm run build
+npm publish --workspace pi-presence --access public         # add --dry-run to validate
+npm publish --workspace pi-presence-watch --access public   # prepack builds the bundle
 ```
 
 ## Caveats

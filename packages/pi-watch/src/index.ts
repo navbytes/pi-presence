@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 import {
   DEFAULT_GC_TTL_MS,
   buildViewModel,

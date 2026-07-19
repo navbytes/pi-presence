@@ -25,8 +25,9 @@ jobs:
           registry-url: "https://registry.npmjs.org"
       - run: npm ci
       - run: npm run check
+      - run: npm run build
 
-      - name: publish pi-presence
+      - name: publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
@@ -35,4 +36,9 @@ jobs:
             FLAG="--dry-run"
             echo "::notice::DRY RUN — packing and validating, nothing will be published"
           fi
+          echo "::group::pi-presence (extension)"
           npm publish -w pi-presence --access public $FLAG
+          echo "::endgroup::"
+          echo "::group::pi-presence-watch (reader CLI)"
+          npm publish -w pi-presence-watch --access public $FLAG
+          echo "::endgroup::"
