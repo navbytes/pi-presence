@@ -1,0 +1,11 @@
+{
+  "name": "@pi-presence/vee-plugin",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Vee / xbar / SwiftBar menu-bar plugin for pi-presence — a single copyable script.",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  }
+}

@@ -17,4 +17,5 @@ All notable changes to this repository are documented here. The published
   - `@pi-presence/shared` — the pi-free reader library (schema, liveness,
     watch/reconcile, view model, RFC 6902 JSON Patch, terminal focus).
   - `pi-watch` — a standalone terminal reader over the shared library.
-  - `vee-pi-presence` — a Vee menubar plugin (JSON-RPC + JSON Patch over stdio).
+  - `@pi-presence/vee-plugin` — a Vee / xbar / SwiftBar menu-bar plugin (a single
+    copyable script that renders `pi-presence-watch --once --json`).

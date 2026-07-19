@@ -21,7 +21,7 @@
     "packages/shared",
     "packages/pi-presence",
     "packages/pi-watch",
-    "packages/vee-pi-presence"
+    "packages/vee-plugin"
   ],
   "scripts": {
     "build": "npm run build --workspaces --if-present",
