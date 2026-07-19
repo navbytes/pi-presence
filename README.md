@@ -94,7 +94,10 @@ garbage-collected; the extension also unlinks its own file on a `quit` shutdown.
 
 ## Settings
 
-Add a `pi-presence` block to `<agentDir>/settings.json`:
+Add a `pi-presence` block to `<agentDir>/settings.json` (global). A project
+`.pi/settings.json` block overrides the global one per key. A mistyped key
+(e.g. `enabled: "false"` as a string) falls back to its default and prints a
+one-line warning to stderr rather than being silently ignored.
 
 ```jsonc
 {

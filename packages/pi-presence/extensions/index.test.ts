@@ -9,6 +9,7 @@ import type { StateFile } from "../src/schema.js";
 const hoisted = vi.hoisted(() => ({ agentDir: "" }));
 vi.mock("@earendil-works/pi-coding-agent", () => ({
   getAgentDir: () => hoisted.agentDir,
+  CONFIG_DIR_NAME: ".pi",
 }));
 
 import piPresence from "./index.js";
@@ -99,6 +100,21 @@ describe("pi-presence extension wiring", () => {
     // quit -> file removed
     handlers.get("session_shutdown")?.({ type: "session_shutdown", reason: "quit" }, ctx);
     expect(existsSync(path)).toBe(false);
+  });
+
+  it("refreshes the model on model_select (provider/id)", () => {
+    const { api, handlers } = makeApi();
+    piPresence(api as unknown as Parameters<typeof piPresence>[0]);
+    const ctx = makeCtx();
+    handlers.get("session_start")?.({ type: "session_start", reason: "startup" }, ctx);
+    // ctx.model has no provider -> bare id
+    expect(readState().model).toBe("anthropic/claude");
+
+    handlers.get("model_select")?.(
+      { type: "model_select", model: { id: "gpt-5", provider: "openai" }, source: "set" },
+      ctx,
+    );
+    expect(readState().model).toBe("openai/gpt-5");
   });
 
   it("keeps the file on a non-quit shutdown (reload rebind)", () => {

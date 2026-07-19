@@ -60,17 +60,25 @@ function paint(text: string, color: keyof typeof ANSI, enabled: boolean): string
   return enabled ? `${ANSI[color]}${text}${ANSI.reset}` : text;
 }
 
+/** A short, stable session-id suffix to disambiguate look-alike sessions. */
+export function shortId(id: string): string {
+  return id.length <= 6 ? id : id.slice(-6);
+}
+
 /** Render one session as a single line. */
 export function renderSessionLine(s: ViewSession, opts: RenderOptions = {}): string {
   const color = opts.color ?? false;
   const now = opts.now ?? Date.now();
   const icon = STATE_ICON[s.state];
   const name = paint(s.name, "bold", color);
+  // Always show a short id so two same-named sessions in one repo are distinct.
+  const id = paint(`#${shortId(s.id)}`, "dim", color);
   const meta: string[] = [];
+  if (s.model) meta.push(paint(s.model, "gray", color));
   if (s.branch) meta.push(paint(s.branch, "cyan", color));
   meta.push(paint(humanizeAge(Math.max(0, now - s.updatedAt)), "dim", color));
   const detail = s.state === "blocked" && s.blockedLabel ? ` — ${s.blockedLabel}` : "";
-  return `  ${icon} ${name}  ${paint(s.cwd, "dim", color)}  [${meta.join(" · ")}]${detail}`;
+  return `  ${icon} ${name} ${id}  ${paint(s.cwd, "dim", color)}  [${meta.join(" · ")}]${detail}`;
 }
 
 /** Render the whole view model into lines. */
