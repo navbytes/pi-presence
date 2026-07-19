@@ -1,6 +1,6 @@
 import type { ViewModel, ViewSession } from "@pi-presence/shared";
 import { describe, expect, it } from "vitest";
-import { humanizeAge, renderSessionLine, renderView } from "./render.js";
+import { humanizeAge, renderSessionLine, renderView, shortId } from "./render.js";
 
 function session(overrides: Partial<ViewSession>): ViewSession {
   return {
@@ -90,5 +90,21 @@ describe("renderView", () => {
       { color: false, now: 0 },
     );
     expect(line).toContain("Allow rm -rf?");
+  });
+
+  it("disambiguates look-alike sessions with a short id and model", () => {
+    const line = renderSessionLine(
+      session({ id: "abc123def456", name: "proj", model: "anthropic/claude", cwd: "/x/proj" }),
+      { color: false, now: 0 },
+    );
+    expect(line).toContain("#def456"); // last 6 of the id
+    expect(line).toContain("anthropic/claude");
+  });
+});
+
+describe("shortId", () => {
+  it("returns the last 6 chars for long ids and the whole id when short", () => {
+    expect(shortId("abcdef123456")).toBe("123456");
+    expect(shortId("abc")).toBe("abc");
   });
 });
