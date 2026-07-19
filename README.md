@@ -178,24 +178,41 @@ dependency), enforced by `npm run check:schema-sync`.
 Two packages publish to npm: `pi-presence` (the extension) and
 `pi-presence-watch` (the reader CLI, bundled so it has no runtime deps). The
 `@pi-presence/shared` library is bundled into the reader, not published.
-Publishing is token-based (no npm provenance), so it works regardless of repo
-visibility. Add an npm automation token as the `NPM_TOKEN` repo secret first.
+
+CI publishing uses **npm Trusted Publishing (OIDC)** — no `NPM_TOKEN` secret is
+stored anywhere. The `publish-npm` workflow requests a short-lived token via
+OIDC (`id-token: write`) and attaches **provenance**. This needs the repo to be
+public (it is) and a one-time setup on npm.
+
+**First publish (bootstrap).** A trusted publisher can only be configured for a
+package that already exists, so publish each package once from your machine:
+
+```sh
+npm ci && npm run build
+npm login
+npm publish --workspace pi-presence --access public         # add --dry-run to validate
+npm publish --workspace pi-presence-watch --access public   # prepack builds the bundle
+```
+
+**Then enable token-free CI publishing** — on npmjs.com, for each of
+`pi-presence` and `pi-presence-watch`: Settings → Trusted Publisher → add GitHub
+`navbytes/pi-presence` with workflow `publish-npm.yml`.
+
+**Subsequent releases:**
 
 1. Bump `version` in `packages/pi-presence/package.json` and add a matching
    `## <version>` section to `packages/pi-presence/CHANGELOG.md`.
 2. Tag it: `git tag vX.Y.Z && git push --tags`. The `release` workflow verifies
    the tag matches the package version, runs `npm run check` + `npm run build`,
    and creates the GitHub Release (notes from the CHANGELOG section).
-3. Publish to npm: run the `publish-npm` workflow (leave `dry-run` on first to
-   pack & validate both packages, then run it with `dry-run` off).
+3. Run the `publish-npm` workflow (leave `dry-run` on first to pack & validate,
+   then run it with `dry-run` off) — it publishes both packages via OIDC with
+   provenance, no secret required.
 
-To publish locally without CI:
-
-```sh
-npm ci && npm run check && npm run build
-npm publish --workspace pi-presence --access public         # add --dry-run to validate
-npm publish --workspace pi-presence-watch --access public   # prepack builds the bundle
-```
+> Prefer a stored token instead? Set an `NPM_TOKEN` repo (or GitHub org) secret,
+> add `env: NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}` to the publish step, and
+> drop `--provenance` / `id-token`. Trusted publishing is recommended now that
+> the repo is public.
 
 ## Caveats
 
