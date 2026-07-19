@@ -1,19 +1,36 @@
 {
-  "name": "pi-watch",
+  "name": "pi-presence-watch",
   "version": "0.1.0",
-  "private": true,
-  "description": "Standalone terminal reader for pi-presence: a live, grouped list of every pi session (needs-you / running / idle / dormant).",
+  "description": "Standalone terminal reader for pi-presence: a live, grouped list of every pi session (needs-you / running / idle / dormant), with focus and prune commands.",
+  "keywords": ["pi", "pi-presence", "cli", "terminal", "status", "tui"],
   "type": "module",
   "license": "MIT",
-  "files": ["src", "README.md"],
+  "author": "Naveen (navbytes)",
+  "homepage": "https://github.com/navbytes/pi-presence/tree/main/packages/pi-watch#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/navbytes/pi-presence.git",
+    "directory": "packages/pi-watch"
+  },
+  "bugs": {
+    "url": "https://github.com/navbytes/pi-presence/issues"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "pi-presence-watch": "./dist/index.js"
+  },
+  "files": ["dist", "README.md", "LICENSE"],
   "scripts": {
     "start": "tsx src/index.ts",
+    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist/index.js --banner:js=\"#!/usr/bin/env node\"",
+    "prepack": "npm run build",
     "typecheck": "tsc -p tsconfig.json"
   },
-  "dependencies": {
-    "@pi-presence/shared": "*"
-  },
   "devDependencies": {
+    "@pi-presence/shared": "*",
+    "esbuild": "^0.24.0",
     "tsx": "^4.19.0"
   }
 }
