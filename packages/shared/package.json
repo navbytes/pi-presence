@@ -1,0 +1,14 @@
+{
+  "name": "@pi-presence/shared",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Zero-pi-dependency reader library for pi-presence: state schema, liveness, watch/reconcile, view model, JSON Patch, and terminal focus.",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  }
+}

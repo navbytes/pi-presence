@@ -1,0 +1,44 @@
+{
+  "name": "pi-presence-monorepo",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Monorepo for pi-presence: ambient session-status for the pi coding agent.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Naveen (navbytes)",
+  "homepage": "https://github.com/navbytes/pi-presence#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/navbytes/pi-presence.git"
+  },
+  "bugs": {
+    "url": "https://github.com/navbytes/pi-presence/issues"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "packages/shared",
+    "packages/pi-presence",
+    "packages/pi-watch",
+    "packages/vee-pi-presence"
+  ],
+  "scripts": {
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write .",
+    "check:schema-sync": "node scripts/check-schema-sync.mjs",
+    "check": "npm run lint && npm run typecheck && npm run check:schema-sync && npm run test",
+    "assets:demo": "node scripts/gen-demo-png.mjs"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "@earendil-works/pi-coding-agent": "^0.80.10",
+    "@types/node": "^22.10.0",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.9"
+  }
+}

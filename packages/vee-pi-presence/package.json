@@ -1,0 +1,19 @@
+{
+  "name": "vee-pi-presence",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Vee menubar plugin (reader adapter) for pi-presence: watches the live directory and emits JSON-RPC + JSON Patch view updates over stdio, with click-to-focus.",
+  "type": "module",
+  "license": "MIT",
+  "files": ["src", "vee.plugin.json", "README.md"],
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@pi-presence/shared": "*"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0"
+  }
+}

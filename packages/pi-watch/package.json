@@ -1,0 +1,19 @@
+{
+  "name": "pi-watch",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Standalone terminal reader for pi-presence: a live, grouped list of every pi session (needs-you / running / idle / dormant).",
+  "type": "module",
+  "license": "MIT",
+  "files": ["src", "README.md"],
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@pi-presence/shared": "*"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0"
+  }
+}
