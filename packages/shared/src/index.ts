@@ -8,3 +8,4 @@ export * from "./view-model.js";
 export * from "./watch.js";
 export * from "./json-patch.js";
 export * from "./focus.js";
+export * from "./clipboard.js";

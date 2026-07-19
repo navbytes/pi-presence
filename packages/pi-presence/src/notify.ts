@@ -7,9 +7,9 @@ import type { SessionState } from "./schema.js";
 //   - `working` → `idle` after work → "pi finished" (only past a duration
 //                                     threshold, to avoid spam on quick turns)
 //
-// Delivery uses `osascript` (zero dependency). The plan's optional branded
-// LSUIElement helper app can replace this later; the decision logic is unchanged.
-// Fail open: a duplicate notification beats a missed "needs-you".
+// Delivery is zero-dependency and cross-platform: macOS → `osascript`,
+// Linux → `notify-send`. Fail open: a duplicate notification beats a missed
+// "needs-you".
 // ---------------------------------------------------------------------------
 
 export interface Notification {
@@ -62,25 +62,48 @@ export function buildNotifyScript(n: Notification): string {
   )}"`;
 }
 
+export type NotifySender = "osascript" | "notify-send";
+
+export interface NotifyCommand {
+  file: string;
+  args: string[];
+}
+
+/** The notification sender for a platform, or null if unsupported. */
+export function senderFor(platform: NodeJS.Platform): NotifySender | null {
+  if (platform === "darwin") return "osascript";
+  if (platform === "linux") return "notify-send";
+  return null;
+}
+
+/** Build the spawn command for a given sender. */
+export function buildNotifyCommand(n: Notification, sender: NotifySender): NotifyCommand {
+  if (sender === "osascript") {
+    return { file: "osascript", args: ["-e", buildNotifyScript(n)] };
+  }
+  return { file: "notify-send", args: [n.title, n.message] };
+}
+
 export interface NotifyDeps {
-  run?: (script: string) => void;
+  run?: (cmd: NotifyCommand) => void;
   platform?: NodeJS.Platform;
 }
 
-function defaultRun(script: string): void {
-  execFileSync("osascript", ["-e", script], {
+function defaultRun(cmd: NotifyCommand): void {
+  execFileSync(cmd.file, cmd.args, {
     stdio: ["ignore", "ignore", "ignore"],
     timeout: 5000,
   });
 }
 
-/** Send a notification (macOS only). Never throws. Returns whether it ran. */
+/** Send a notification (macOS/Linux). Never throws. Returns whether it ran. */
 export function sendNotification(n: Notification, deps: NotifyDeps = {}): boolean {
   const platform = deps.platform ?? process.platform;
-  if (platform !== "darwin") return false;
+  const sender = senderFor(platform);
+  if (!sender) return false;
   const run = deps.run ?? defaultRun;
   try {
-    run(buildNotifyScript(n));
+    run(buildNotifyCommand(n, sender));
     return true;
   } catch {
     return false;
