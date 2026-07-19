@@ -1,0 +1,38 @@
+name: publish-npm
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: "Pack & validate only (no publish)"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: publish to npm
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          registry-url: "https://registry.npmjs.org"
+      - run: npm ci
+      - run: npm run check
+
+      - name: publish pi-presence
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          FLAG=""
+          if [ "${{ inputs.dry-run }}" = "true" ]; then
+            FLAG="--dry-run"
+            echo "::notice::DRY RUN — packing and validating, nothing will be published"
+          fi
+          npm publish -w pi-presence --access public $FLAG
