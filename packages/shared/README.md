@@ -1,7 +1,7 @@
 # @pi-presence/shared
 
 The zero-pi-dependency reader library behind [pi-presence](https://github.com/navbytes/pi-presence).
-Consumed by `pi-watch`, `vee-pi-presence`, and any standalone reader — it never
+Consumed by `pi-presence-watch` and any standalone reader — it never
 imports pi, so non-pi hosts can use it without pulling the pi peer packages.
 
 ## Exports

@@ -8,8 +8,8 @@ it needs from you — _needs-you_, _running_, _idle_, _dormant_.
 ![pi-presence](assets/demo.png)
 
 > **Status:** early. The published extension (`pi-presence`) and the reader
-> library (`@pi-presence/shared`) are the stable, tested core. `pi-watch` and
-> `vee-pi-presence` are working readers built on top. macOS is the primary
+> library (`@pi-presence/shared`) are the stable, tested core. `pi-presence-watch`
+> and the Vee plugin are working readers built on top. macOS is the primary
 > target; the state files and readers are cross-platform.
 
 ## Why
@@ -27,7 +27,7 @@ into a glanceable list or a menubar item.
 | [`pi-presence`](packages/pi-presence) | The pi extension: writes state files, labels tabs, consumes/produces `herdr:blocked`, optional notifications. | npm |
 | [`@pi-presence/shared`](packages/shared) | Zero-pi-dependency reader library: schema, liveness, watch/reconcile, view model, JSON Patch, terminal focus. | workspace-only (bundled into the reader) |
 | [`pi-presence-watch`](packages/pi-watch) | Standalone terminal reader — a live grouped list of all sessions, plus `focus`/`gc` commands. | npm |
-| [`vee-pi-presence`](packages/vee-pi-presence) | Vee menubar plugin: JSON-RPC + JSON Patch over stdio, with click-to-focus. | no |
+| [`@pi-presence/vee-plugin`](packages/vee-plugin) | Vee / xbar / SwiftBar menu-bar plugin — a single copyable script that renders `pi-presence-watch --once --json`. | copy the script |
 
 ## Install the extension
 
@@ -222,9 +222,10 @@ npm publish --workspace pi-presence-watch --access public   # prepack builds the
   every full repaint.
 - The `herdr:blocked` payload shape, ref-count semantics, and the retry-grace
   value are the assumed contract; only `idleDebounceMs = 250` is confirmed.
-- Vee has no public plugin API. `packages/vee-pi-presence/vee.plugin.json` and
-  the `vee.*` bindings are assumptions; only the stdio JSON-RPC + JSON Patch
-  contract in `src/` is stable.
+- The Vee plugin targets Vee's xbar/SwiftBar-compatible format (a single script
+  that prints menu text to stdout). Click actions shell out to `pi-presence-watch`
+  and `pi`; if Vee's GUI `PATH` lacks your npm global bin, use absolute paths (see
+  the plugin README).
 - macOS TCC (Automation) and Notification permission prompts appear on first use
   and cannot be scripted; readers fail open (a duplicate beats a missed alert)
   and fall back to copy-to-clipboard when focus is denied.
