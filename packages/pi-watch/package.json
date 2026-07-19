@@ -1,6 +1,6 @@
 {
   "name": "pi-presence-watch",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Standalone terminal reader for pi-presence: a live, grouped list of every pi session (needs-you / running / idle / dormant), with focus and prune commands.",
   "keywords": ["pi", "pi-presence", "cli", "terminal", "status", "tui"],
   "type": "module",
