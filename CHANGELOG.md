@@ -2,8 +2,9 @@
 
 All notable changes to this repository are documented here. The published
 `pi-presence` extension keeps its own changelog at
-[`packages/pi-presence/CHANGELOG.md`](packages/pi-presence/CHANGELOG.md),
-maintained by Release Please from conventional commits.
+[`packages/pi-presence/CHANGELOG.md`](packages/pi-presence/CHANGELOG.md); its
+`## <version>` sections become the GitHub Release notes (see
+`scripts/changelog-section.mjs`).
 
 ## Unreleased
 

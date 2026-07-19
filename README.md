@@ -168,6 +168,27 @@ Requires Node ≥ 22. The canonical state schema lives in
 `packages/pi-presence/src/schema.ts` (so its tarball has no workspace
 dependency), enforced by `npm run check:schema-sync`.
 
+## Publishing
+
+Only `pi-presence` is published (the readers stay workspace-private). Publishing
+is token-based (no npm provenance), so it works from a private source repo.
+
+1. Bump `version` in `packages/pi-presence/package.json` and add a matching
+   `## <version>` section to `packages/pi-presence/CHANGELOG.md`.
+2. Tag it: `git tag vX.Y.Z && git push --tags`. The `release` workflow verifies
+   the tag matches the package version, runs `npm run check`, and creates the
+   GitHub Release (notes from the CHANGELOG section).
+3. Publish to npm: run the `publish-npm` workflow (leave `dry-run` on first to
+   pack & validate, then run it with `dry-run` off). It uses the `NPM_TOKEN`
+   secret.
+
+To publish locally without CI (e.g. while Actions runners are unavailable):
+
+```sh
+npm ci && npm run check
+npm publish --workspace pi-presence --access public   # add --dry-run to validate
+```
+
 ## Caveats
 
 - Writing OSC to stdout during a TUI render is the community pattern for tab
