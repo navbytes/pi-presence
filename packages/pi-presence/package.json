@@ -1,6 +1,6 @@
 {
   "name": "pi-presence",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Ambient session-status for the pi coding agent: per-session state files, self-labeling terminal tabs, and a menubar/TUI view of every session (needs-you / running / dormant).",
   "keywords": [
     "pi-package",
