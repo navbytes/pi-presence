@@ -142,18 +142,27 @@ describe("renderMenu with resolved absolute bins", () => {
   });
 });
 
-describe("Prune dormant sessions action", () => {
-  it("shows a prune action with the dormant count when any session is dormant", () => {
-    const text = renderMenu(vm([session({ id: "d1", state: "dormant", group: "dormant" })])).join(
-      "\n",
-    );
+describe("Prune sessions dormant >24h action", () => {
+  it("counts only dormant sessions past the 24h gc TTL, matching what gc actually prunes", () => {
+    const text = renderMenu(
+      vm([session({ id: "d1", state: "dormant", group: "dormant", updatedAt: 0 })]),
+    ).join("\n");
     expect(text).toContain(
-      "Prune dormant sessions (1) | shell=pi-presence-watch param0=gc terminal=false refresh=true",
+      "Prune sessions dormant >24h (1) | shell=pi-presence-watch param0=gc terminal=false refresh=true",
     );
+  });
+
+  it("excludes a dormant session that hasn't hit the 24h TTL yet", () => {
+    const text = renderMenu(
+      vm([
+        session({ id: "d1", state: "dormant", group: "dormant", updatedAt: Date.now() - 60_000 }),
+      ]),
+    ).join("\n");
+    expect(text).not.toContain("Prune sessions dormant");
   });
 
   it("hides the prune action when nothing is dormant", () => {
     const text = renderMenu(vm([session({})])).join("\n");
-    expect(text).not.toContain("Prune dormant sessions");
+    expect(text).not.toContain("Prune sessions dormant");
   });
 });

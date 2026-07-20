@@ -62,6 +62,10 @@ const GROUP_TITLE: Record<string, string> = {
   dormant: "DORMANT",
 };
 const GROUP_ORDER = ["needs-you", "running", "idle", "dormant"];
+// Mirrors packages/shared/src/reconcile.ts's DEFAULT_GC_TTL_MS — duplicated
+// because this plugin is a single copyable file with no imports from
+// @pi-presence/shared. `gc` only prunes dormant files past this age.
+const GC_TTL_MS = 24 * 60 * 60 * 1000;
 
 /** Quote an xbar parameter value if it contains anything beyond a safe set. */
 export function param(value: string): string {
@@ -165,9 +169,16 @@ export function renderMenu(vm: ViewModel, opts: RenderOptions = {}): string[] {
   }
 
   lines.push("---");
-  if (c.dormant > 0) {
+  // `gc` (no --all) only prunes dormant files past the 24h TTL, not every
+  // dormant session shown above — count just the gc-eligible ones so the
+  // number matches what the click actually prunes.
+  const now = Date.now();
+  const gcEligible = vm.sessions.filter(
+    (s) => s.state === "dormant" && now - s.updatedAt > GC_TTL_MS,
+  ).length;
+  if (gcEligible > 0) {
     lines.push(
-      `Prune dormant sessions (${c.dormant}) | shell=${watch} param0=gc terminal=false refresh=true`,
+      `Prune sessions dormant >24h (${gcEligible}) | shell=${watch} param0=gc terminal=false refresh=true`,
     );
   }
   lines.push("Refresh | refresh=true");

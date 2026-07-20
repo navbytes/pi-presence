@@ -3,6 +3,7 @@ import {
   buildViewModel,
   getLiveDir,
   loadAllAndReconcile,
+  normalizeTerminalName,
   watchLive,
 } from "@pi-presence/shared";
 import { performFocus, performResume, resolveSession } from "./commands.js";
@@ -101,6 +102,12 @@ function runResume(query: string, opts: Options): number {
     return 1;
   }
   const outcome = performResume(res.session, opts.piBin);
+  const configuredTerminal = process.env.PI_PRESENCE_TERMINAL;
+  if (configuredTerminal && !normalizeTerminalName(configuredTerminal)) {
+    process.stderr.write(
+      `PI_PRESENCE_TERMINAL=${configuredTerminal} not recognized (expected iterm2|ghostty|terminal); using ${outcome.kind}\n`,
+    );
+  }
   if (outcome.launched) {
     process.stdout.write(`resuming ${res.session.name} in ${outcome.kind}\n`);
   } else if (outcome.copied) {
