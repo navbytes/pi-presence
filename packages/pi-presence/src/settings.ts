@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { CONFIG_DIR_NAME, getAgentDir } from "@earendil-works/pi-coding-agent";
+import { configDirName, resolveAgentDir } from "./pi-agent-dir.js";
 
 // ---------------------------------------------------------------------------
 // Settings, read from the `pi-presence` block of `settings.json`.
@@ -23,7 +23,7 @@ export interface PresenceSettings {
   titleFormat: string;
   /** Fire desktop notifications on blocked / long-run-finished transitions. */
   notify: boolean;
-  /** Debounce before an `agent_settled` becomes `idle` (collapses flicker). */
+  /** Debounce after `agent_end` before settling to `idle` (collapses flicker). */
   idleDebounceMs: number;
   /** Re-check delay when a settle fires but the agent is not actually idle. */
   retryGraceMs: number;
@@ -148,13 +148,14 @@ export interface LoadSettingsOptions {
 
 /** Load global + project settings, merged, with warnings. Never throws. */
 export function loadSettings(opts: LoadSettingsOptions = {}): SettingsResult {
-  const agentDir = opts.agentDir ?? getAgentDir();
+  const agentDir = opts.agentDir ?? resolveAgentDir();
   const warnings: string[] = [];
   const globalRaw = readJson(join(agentDir, "settings.json"), "global settings.json", warnings);
+  const dirName = configDirName();
   const projectRaw = opts.cwd
     ? readJson(
-        join(opts.cwd, CONFIG_DIR_NAME, "settings.json"),
-        `project ${CONFIG_DIR_NAME}/settings.json`,
+        join(opts.cwd, dirName, "settings.json"),
+        `project ${dirName}/settings.json`,
         warnings,
       )
     : undefined;
@@ -163,6 +164,6 @@ export function loadSettings(opts: LoadSettingsOptions = {}): SettingsResult {
 }
 
 /** Read merged settings (discarding warnings). */
-export function readSettings(agentDir: string = getAgentDir()): PresenceSettings {
+export function readSettings(agentDir: string = resolveAgentDir()): PresenceSettings {
   return loadSettings({ agentDir }).settings;
 }
