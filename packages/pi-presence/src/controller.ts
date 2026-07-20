@@ -31,6 +31,13 @@ export interface PresenceControllerDeps<TTimer = DefaultTimer> {
   isIdle: () => boolean;
   writeState: (file: StateFile) => void;
   unlinkState: (sessionId: string) => void;
+  /**
+   * Current session name, re-read on every write. pi has no rename event
+   * (`session_info_changed` is an internal TUI-only stream, not a real
+   * extension event), so this is the only way a `/name` rename ever reaches
+   * the state file.
+   */
+  getSessionName?: () => string | null;
   /** Present only when title emission is enabled AND allowed (tui + tty). */
   writeTitle?: (title: string) => void;
   /** Title format string; when undefined, no title is rendered or recorded. */
@@ -123,20 +130,22 @@ export class PresenceController<TTimer = DefaultTimer> {
   }
 
   /**
-   * Teardown. Only `quit` (or process death) removes the file; reload/new/
-   * resume/fork keep it because the process survives and the extension is
-   * recreated — the next `start()` rebinds.
+   * Teardown. Every reason unlinks the file: reload/new/resume/fork keep the
+   * process alive and re-run the extension's `session_start`, which rebinds a
+   * (new) session id and rewrites a fresh file — leaving the OLD file behind
+   * would linger with a still-alive pid, showing readers a phantom session
+   * until GC (defects-wave1.md D11).
    */
-  shutdown(reason: "quit" | "reload" | "new" | "resume" | "fork"): void {
+  shutdown(_reason: "quit" | "reload" | "new" | "resume" | "fork"): void {
     this.clearSettle();
-    if (reason === "quit" && this.id) {
+    if (this.id) {
       this.deps.unlinkState(this.id.sessionId);
       this.id = undefined;
     }
   }
 
-  /** Cancel any pending idle-settle timer. */
-  dispose(): void {
+  /** Cancel a pending idle-settle timer without changing state (e.g. a new turn is about to start). */
+  cancelPendingIdle(): void {
     this.clearSettle();
   }
 
@@ -177,6 +186,8 @@ export class PresenceController<TTimer = DefaultTimer> {
     const id = this.id;
     if (!id) return;
     const to = this.state;
+
+    if (this.deps.getSessionName) id.sessionName = this.deps.getSessionName();
 
     let title: string | undefined;
     if (this.deps.titleFormat) {

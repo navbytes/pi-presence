@@ -33,7 +33,8 @@
     "format": "biome format --write .",
     "check:schema-sync": "node scripts/check-schema-sync.mjs",
     "check": "npm run lint && npm run typecheck && npm run check:schema-sync && npm run test",
-    "assets:demo": "node scripts/gen-demo-png.mjs"
+    "assets:demo": "node scripts/gen-demo-png.mjs",
+    "smoke": "node scripts/smoke-live.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
