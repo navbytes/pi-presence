@@ -9,10 +9,11 @@ so non-pi hosts can use it without pulling the pi peer packages.
 ## Exports
 
 - **schema** — the canonical `StateFile` type, `SCHEMA_VERSION`, and forward-compat guards. (Byte-identical to the extension's pinned copy; enforced in CI.)
-- **paths** — live-directory resolution (`PI_PRESENCE_LIVE_DIR` / `PI_CODING_AGENT_DIR` / `~/.pi/agent`).
+- **paths** — live-directory resolution (`PI_PRESENCE_LIVE_DIR` / `PI_CODING_AGENT_DIR` / `~/.pi/agent`) and `pinsFilePath(liveDir)`.
 - **liveness** — `isAlive(pid, startTime)` with PID-reuse detection.
-- **reconcile** — `loadAllAndReconcile(dir)`: parse, validate, and liveness-annotate (with an optional TTL prune of long-dead files).
-- **view-model** — `buildViewModel(snapshots)`: grouped (needs-you / running / idle / dormant), sorted, counted.
+- **pins** — the pin store: `readPinsFile`/`addPin`/`removePin` (atomic, capped at 20) against `<agentDir>/presence-pins.json`, plus `pinMatches`/`toPinEntry`. Corrupt or absent files read as empty; unknown fields on an entry survive a round trip.
+- **reconcile** — `loadAllAndReconcile(dir)`: parse, validate, and liveness-annotate (with an optional TTL prune of long-dead files — never a pinned one).
+- **view-model** — `buildViewModel(snapshots, now, pins)`: grouped (needs-you / running / idle / dormant), sorted, counted, with each session's `pinned` flag and a `pinned` section (live rows plus "ghost" rows for pins whose state file is gone).
 - **watch** — `watchLive(dir, onChange)`: `fs.watch` + periodic liveness reconcile.
 - **json-patch** — RFC 6902 `compare` / `applyPatch` for incremental UI updates.
 - **focus** — build/execute terminal focus commands (iTerm2 / Ghostty / Terminal.app / tmux) and resume commands.

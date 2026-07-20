@@ -5,6 +5,8 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { type Liveness, isAlive as defaultIsAlive } from "./liveness.js";
+import { pinsFilePath } from "./paths.js";
+import { type PinsFile, pinMatches, readPinsFile } from "./pins.js";
 import { type LiveState, type StateFile, isReadableSchema, normalizeState } from "./schema.js";
 
 // ---------------------------------------------------------------------------
@@ -28,6 +30,8 @@ export interface SessionSnapshot {
   liveState: LiveState;
   /** `now - file.updatedAt` in ms. */
   ageMs: number;
+  /** Whether this session matches an entry in the pin store. See pins.ts. */
+  pinned: boolean;
 }
 
 /** Injectable dependencies so reconciliation is unit-testable without real IO. */
@@ -48,6 +52,13 @@ export interface ReconcileOptions extends ReconcileDeps {
    * returned, just not deleted. Only the explicit `gc` command opts in.
    */
   prune?: boolean;
+  /**
+   * The pin store to protect pinned sessions from pruning and to annotate
+   * `SessionSnapshot.pinned`. Defaults to reading `pinsFilePath(dir)` via the
+   * (possibly injected) `readFile`, so callers get correct behavior for free;
+   * pass this explicitly only to override (mainly for tests).
+   */
+  pins?: PinsFile;
 }
 
 /** Parse + validate a single state file's raw JSON text. Returns null on any problem. */
@@ -102,6 +113,7 @@ export function loadAllAndReconcile(dir: string, opts: ReconcileOptions = {}): S
   const unlink = opts.unlink ?? ((p: string) => fsUnlinkSync(p));
   const gcTtlMs = opts.gcTtlMs ?? 0;
   const prune = opts.prune ?? false;
+  const pins = opts.pins ?? readPinsFile(pinsFilePath(dir), { readFile });
 
   let entries: string[];
   try {
@@ -131,8 +143,11 @@ export function loadAllAndReconcile(dir: string, opts: ReconcileOptions = {}): S
     const liveness = isAlive(file.pid, file.startTime || undefined);
     const ageMs = Math.max(0, nowMs - file.updatedAt);
     const dead = liveness !== "alive";
+    const pinned = pins.pins.some((p) => pinMatches(p, file));
 
-    if (dead && prune && gcTtlMs > 0 && ageMs > gcTtlMs) {
+    // Protection from expiry is the feature: a pinned session's file is never
+    // pruned, regardless of TTL/--all. Unpinning re-exposes it to gc.
+    if (dead && prune && gcTtlMs > 0 && ageMs > gcTtlMs && !pinned) {
       try {
         unlink(path);
       } catch {
@@ -147,6 +162,7 @@ export function loadAllAndReconcile(dir: string, opts: ReconcileOptions = {}): S
       liveness,
       liveState: dead ? "dormant" : file.state,
       ageMs,
+      pinned,
     });
   }
 

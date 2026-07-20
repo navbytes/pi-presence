@@ -25,6 +25,7 @@ function session(overrides: Partial<ViewSession>): ViewSession {
     path: "/live/id.json",
     sessionFile: null,
     terminal: {},
+    pinned: false,
     ...overrides,
   };
 }
@@ -37,7 +38,7 @@ function model(sessions: ViewSession[]): ViewModel {
     else if (s.group === "idle") counts.idle++;
     else counts.dormant++;
   }
-  return { generatedAt: 0, counts, sessions };
+  return { generatedAt: 0, counts, sessions, pinned: [] };
 }
 
 describe("humanizeAge", () => {
@@ -299,6 +300,7 @@ describe("renderView width-responsiveness", () => {
       generatedAt: 0,
       counts: { needsYou: 300, running: 300, idle: 300, dormant: 300, total: 1200 },
       sessions: [],
+      pinned: [],
     };
     const header20 = renderView(heavy, { color: false, width: 20 })[0] as string;
     const header40 = renderView(heavy, { color: false, width: 40 })[0] as string;
@@ -319,5 +321,76 @@ describe("renderView width-responsiveness", () => {
     expect(plain).not.toContain("\x1b[");
     const colored = renderView(model([session({})]), { color: true, width: 80 }).join("\n");
     expect(colored).toContain("\x1b[");
+  });
+});
+
+describe("renderSessionLine pinned prefix (📌)", () => {
+  const wide = session({
+    id: "abcdef4d5e6f",
+    name: "api-server",
+    state: "blocked",
+    group: "needs-you",
+    cwd: "/Users/naveen/repos/some/deeply/nested/project/dir",
+    branch: "feature/very-long-branch-name",
+    model: "anthropic/claude-sonnet-5",
+    blockedLabel: "Allow rm -rf node_modules && npm install in /Users/x/repos/foo?",
+    updatedAt: -60_000,
+  });
+  const pinnedWide = { ...wide, pinned: true };
+
+  it("prefixes a pinned row with 📌 in place of the indent", () => {
+    const line = renderSessionLine(pinnedWide, { color: false, now: 0, width: 80 })[0] as string;
+    expect(line.startsWith("📌")).toBe(true);
+  });
+
+  it("omits the pin marker for an unpinned row", () => {
+    const line = renderSessionLine(wide, { color: false, now: 0, width: 80 })[0] as string;
+    expect(line.startsWith("📌")).toBe(false);
+  });
+
+  it("keeps the same total width as the unpinned row — 📌 (2 cols) replaces the 2-col indent", () => {
+    const pinnedLine = renderSessionLine(pinnedWide, {
+      color: false,
+      now: 0,
+      width: 80,
+    })[0] as string;
+    const plainLine = renderSessionLine(wide, { color: false, now: 0, width: 80 })[0] as string;
+    expect(displayWidth(pinnedLine)).toBe(displayWidth(plainLine));
+  });
+
+  // Reuses the width-invariant harness at the widths called out for this feature (30/40/80)
+  // plus the suite's usual spread, to prove 📌 never breaks the fit-to-width guarantee.
+  it.each([20, 25, 30, 40, 50, 60, 80, 120])(
+    "never emits a pinned line wider than width=%i",
+    (width) => {
+      const lines = renderSessionLine(pinnedWide, { color: false, now: 0, width });
+      for (const line of lines) expect(displayWidth(line)).toBeLessThanOrEqual(width);
+    },
+  );
+
+  it.each([30, 40, 80])(
+    "always includes the (possibly truncated) name when pinned at width=%i",
+    (width) => {
+      const lines = renderSessionLine(pinnedWide, { color: false, now: 0, width });
+      expect(lines[0]).toMatch(/api-s|…/);
+    },
+  );
+});
+
+describe("renderView with pinned sessions", () => {
+  // AC10: the TUI has no dedicated pinned section this iteration — pinned rows
+  // stay in their normal group, just prefixed.
+  it("AC10: shows a 📌-prefixed row inside its normal group, grouping unchanged", () => {
+    const vm = model([
+      session({ id: "a", name: "pinned-one", group: "idle", pinned: true }),
+      session({ id: "b", name: "plain-one", group: "idle", pinned: false }),
+    ]);
+    const text = renderView(vm, { color: false }).join("\n");
+    expect(text).toContain("IDLE (2)");
+    const lines = text.split("\n");
+    const pinnedLine = lines.find((l) => l.includes("pinned-one")) as string;
+    const plainLine = lines.find((l) => l.includes("plain-one")) as string;
+    expect(pinnedLine.startsWith("📌")).toBe(true);
+    expect(plainLine.startsWith("📌")).toBe(false);
   });
 });

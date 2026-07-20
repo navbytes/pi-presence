@@ -1,17 +1,22 @@
 import {
   type FocusPlan,
   type LaunchCommand,
+  type PinResult,
+  type PinnedRow,
   type TerminalKind,
   type ViewModel,
   type ViewSession,
+  addPin,
   buildFocusPlan,
   buildLaunchCommand,
   buildResumeCommand,
   copyToClipboard,
   executeFocus,
   executeLaunch,
+  removePin,
   resolveLaunchTerminal,
   resolveTmuxSession,
+  toPinEntry,
 } from "@pi-presence/shared";
 import { shortId } from "./render.js";
 
@@ -52,6 +57,74 @@ export function resolveSession(vm: ViewModel, query: string): ResolveResult {
   if (bySubstring.length === 1) return { kind: "found", session: bySubstring[0] as ViewSession };
   if (bySubstring.length > 1) return { kind: "ambiguous", matches: bySubstring };
   return { kind: "none" };
+}
+
+export type ResolvePinnedResult =
+  | { kind: "found"; row: PinnedRow }
+  | { kind: "none" }
+  | { kind: "ambiguous"; matches: PinnedRow[] };
+
+/**
+ * Resolve a PINNED row by query — same tiers as {@link resolveSession}, but
+ * over `vm.pinned` instead of `vm.sessions`, so a ghost pin (no backing live
+ * session) is still resolvable. Used by `unpin`, and by `resume` as a
+ * fallback so a ghost row's "Resume" action keeps working (PIN-SPEC AC7).
+ */
+export function resolvePinned(vm: ViewModel, query: string): ResolvePinnedResult {
+  const q = query.trim();
+  if (!q) return { kind: "none" };
+  const rows = vm.pinned;
+
+  const byExactId = rows.find((r) => r.sessionId === q);
+  if (byExactId) return { kind: "found", row: byExactId };
+
+  const byShortId = rows.filter((r) => shortId(r.sessionId) === q || r.sessionId.endsWith(q));
+  if (byShortId.length === 1) return { kind: "found", row: byShortId[0] as PinnedRow };
+
+  const byExactName = rows.filter((r) => r.name === q);
+  if (byExactName.length === 1) return { kind: "found", row: byExactName[0] as PinnedRow };
+
+  const lower = q.toLowerCase();
+  const bySubstring = rows.filter(
+    (r) => r.name.toLowerCase().includes(lower) || r.cwd.toLowerCase().includes(lower),
+  );
+  if (bySubstring.length === 1) return { kind: "found", row: bySubstring[0] as PinnedRow };
+  if (bySubstring.length > 1) return { kind: "ambiguous", matches: bySubstring };
+  return { kind: "none" };
+}
+
+/**
+ * Synthesize a minimal dormant `ViewSession` from a ghost pinned row, so
+ * `performResume` can still relaunch it (`sessionFile`/`id`/`cwd` are all it
+ * needs); there's no live terminal to correlate, so `terminal` is empty.
+ */
+export function ghostAsViewSession(row: PinnedRow): ViewSession {
+  return {
+    id: row.sessionId,
+    name: row.name,
+    state: "dormant",
+    group: "dormant",
+    cwd: row.cwd,
+    branch: null,
+    model: null,
+    blockedLabel: null,
+    updatedAt: row.pinnedAt,
+    ageMs: 0,
+    path: "",
+    sessionFile: row.sessionFile,
+    terminal: {},
+    pinned: true,
+  };
+}
+
+/** Pin `session`: read-modify-write `presence-pins.json` (see PIN-SPEC.md design decision #2). */
+export function performPin(session: ViewSession, pinsPath: string): PinResult {
+  return addPin(pinsPath, toPinEntry(session));
+}
+
+/** Unpin `row` (live or ghost) — only its identity fields are needed. */
+export function performUnpin(row: PinnedRow, pinsPath: string): PinResult {
+  return removePin(pinsPath, { sessionFile: row.sessionFile, sessionId: row.sessionId });
 }
 
 export interface FocusDeps {

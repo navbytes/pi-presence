@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+### Added
+
+- Session pinning: `pin <query>` / `unpin <query>` (same id/short-id/name/cwd
+  resolution as `focus`/`resume`) keep a session quickly reachable across
+  dormancy. Pins live in `<agentDir>/presence-pins.json` (sibling of `live/`,
+  capped at 20), survive a process restart, and are never parsed as a session
+  file by `gc`, `--once`, or the live TUI. `gc` (default and `--all`) now
+  never deletes a pinned session's state file — expiry protection is the
+  point — and its output reports a "skipped N pinned" count when that
+  happens; unpinning re-exposes the session to gc immediately. The TUI marks
+  pinned rows with a `📌` prefix inline in their existing group (no layout
+  change); the Vee plugin adds a dedicated `📌 PINNED` section above `NEEDS
+  YOU` (a pinned session shows there only, not duplicated in its group) plus
+  Pin/Unpin submenu actions on every row. If a pin's state file goes away
+  outside of gc (manual `rm`, or an id/file that didn't survive a resume as
+  expected), it degrades to a "ghost" row — cached name/cwd, Resume + Unpin
+  only — instead of throwing or silently disappearing.
+
 ### Fixed
 
 - `--help`/`-h` now prints usage and exits 0; any unrecognized flag now prints

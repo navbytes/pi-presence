@@ -3,6 +3,7 @@
 export * from "./schema.js";
 export * from "./paths.js";
 export * from "./liveness.js";
+export * from "./pins.js";
 export * from "./reconcile.js";
 export * from "./view-model.js";
 export * from "./watch.js";

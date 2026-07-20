@@ -45,6 +45,10 @@ const GROUP_COLOR: Record<Group, keyof typeof ANSI> = {
 
 const GROUP_ORDER: Group[] = ["needs-you", "running", "idle", "dormant"];
 
+// U+1F4CC, an astral codepoint -> already 2 display cols via displayWidth's
+// generic astral rule, same width as the 2-space indent it replaces below.
+const PIN_MARK = "📌";
+
 export interface RenderOptions {
   color?: boolean;
   now?: number;
@@ -220,8 +224,11 @@ export function renderSessionLine(s: ViewSession, opts: RenderOptions = {}): str
     if (cwdBudget > 0) cwd = truncTail(s.cwd, cwdBudget);
   }
 
-  const plainLine = `  ${icon} ${name}${idText ? ` ${idText}` : ""}${cwd ? `  ${cwd}` : ""}  ${plainBracket}`;
-  const paintedLine = `  ${icon} ${paint(name, "bold", color)}${idText ? ` ${paint(idText, "dim", color)}` : ""}${cwd ? `  ${paint(cwd, "dim", color)}` : ""}  ${paintedBracket}`;
+  // A pinned row swaps the 2-space indent for 📌 (same 2-col width), so the
+  // "- 5" budget above holds either way — see the PIN_MARK comment.
+  const prefix = s.pinned ? PIN_MARK : "  ";
+  const plainLine = `${prefix}${icon} ${name}${idText ? ` ${idText}` : ""}${cwd ? `  ${cwd}` : ""}  ${plainBracket}`;
+  const paintedLine = `${prefix}${icon} ${paint(name, "bold", color)}${idText ? ` ${paint(idText, "dim", color)}` : ""}${cwd ? `  ${paint(cwd, "dim", color)}` : ""}  ${paintedBracket}`;
 
   if (!blockedLabel) return [paintedLine];
 
