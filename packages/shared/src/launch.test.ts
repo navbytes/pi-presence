@@ -121,6 +121,15 @@ describe("buildLaunchCommand", () => {
     expect(cmd.args).not.toContain("-t");
   });
 
+  it("prepends -S <socket> (before the subcommand) when a tmux socket is recorded", () => {
+    const cmd = buildLaunchCommand("tmux", {
+      ...target,
+      tmuxTarget: "%7",
+      tmuxSocket: "/tmp/tmux-1000/default",
+    });
+    expect(cmd.args.slice(0, 3)).toEqual(["-S", "/tmp/tmux-1000/default", "new-window"]);
+  });
+
   it("shell-quotes a session file path with a space and a single quote", () => {
     const odd = {
       piBin: "/opt/homebrew/bin/pi",
@@ -149,8 +158,22 @@ describe("buildLaunchCommand", () => {
 describe("resolveTmuxSession", () => {
   it("returns the trimmed session name from tmux display-message", () => {
     const run = vi.fn(() => "work\n");
-    expect(resolveTmuxSession("%4", { run })).toBe("work");
+    expect(resolveTmuxSession("%4", null, { run })).toBe("work");
     expect(run).toHaveBeenCalledWith("tmux", [
+      "display-message",
+      "-p",
+      "-t",
+      "%4",
+      "#{session_name}",
+    ]);
+  });
+
+  it("prepends -S <socket> when a tmux socket is given", () => {
+    const run = vi.fn(() => "work\n");
+    resolveTmuxSession("%4", "/tmp/tmux-1000/default", { run });
+    expect(run).toHaveBeenCalledWith("tmux", [
+      "-S",
+      "/tmp/tmux-1000/default",
       "display-message",
       "-p",
       "-t",
@@ -163,11 +186,11 @@ describe("resolveTmuxSession", () => {
     const run = vi.fn(() => {
       throw new Error("can't find pane: %4");
     });
-    expect(resolveTmuxSession("%4", { run })).toBeNull();
+    expect(resolveTmuxSession("%4", null, { run })).toBeNull();
   });
 
   it("returns null on blank output", () => {
-    expect(resolveTmuxSession("%4", { run: () => "  \n" })).toBeNull();
+    expect(resolveTmuxSession("%4", null, { run: () => "  \n" })).toBeNull();
   });
 });
 

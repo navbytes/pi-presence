@@ -90,7 +90,7 @@ export interface ResumeDeps {
   executeLaunch?: (cmd: LaunchCommand) => boolean;
   copyToClipboard?: (text: string) => boolean;
   /** Resolves a recorded tmux pane to its session name. See launch.ts. */
-  resolveTmuxSession?: (pane: string) => string | null;
+  resolveTmuxSession?: (pane: string, socket?: string | null) => string | null;
   /** Defaults to `process.env`; read for `PI_PRESENCE_TERMINAL`. */
   env?: NodeJS.ProcessEnv;
 }
@@ -131,13 +131,18 @@ export function performResume(
   // `new-window -t` wants a session/window, not a pane — resolve the
   // recorded pane first (falls back to the raw pane id, which then fails the
   // same way tmux would have anyway, if resolution itself is unavailable).
+  // `terminal.tmux` is the raw recorded $TMUX ("socketpath,pid,index"); its
+  // socket path targets the right server even when it isn't the default one
+  // (e.g. a custom -L/-S socket, or the default one is gone after a reboot).
   const pane = session.terminal?.tmuxPane ?? null;
-  const tmuxTarget = kind === "tmux" && pane ? (resolveTmux(pane) ?? pane) : pane;
+  const tmuxSocket = session.terminal?.tmux?.split(",")[0] || null;
+  const tmuxTarget = kind === "tmux" && pane ? (resolveTmux(pane, tmuxSocket) ?? pane) : pane;
   const launchCmd = buildLaunchCommand(kind, {
     piBin,
     args: resumeCmd.args,
     cwd: resumeCmd.cwd,
     tmuxTarget,
+    tmuxSocket,
   });
 
   const launched = launchFn(launchCmd);

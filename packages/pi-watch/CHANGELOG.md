@@ -32,3 +32,9 @@
   fit), the counts header switches to compact chips below 60 cols instead of
   wrapping mid-phrase, and the idle `✓` icon is padded so every group's names
   line up in the same column.
+- `resume` now honors a session's recorded custom tmux socket (`terminal.tmux`,
+  the raw `$TMUX`) instead of always querying the default server. Sessions
+  started under a non-default socket (`tmux -L`/`-S`, or a default socket that
+  no longer exists after a reboot) now resolve and relaunch on the right
+  server via `tmux -S <path>`, instead of silently failing pane resolution and
+  falling back to copying the resume command.
