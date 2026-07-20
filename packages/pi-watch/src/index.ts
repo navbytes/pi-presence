@@ -33,10 +33,11 @@ const KNOWN_FLAGS = new Set([
   "--all",
   "--ttl",
   "--pi-bin",
+  "--width",
 ]);
 
 // Flags that take a value as the following argv entry.
-const VALUE_FLAGS = new Set(["--dir", "--ttl", "--pi-bin"]);
+const VALUE_FLAGS = new Set(["--dir", "--ttl", "--pi-bin", "--width"]);
 
 const USAGE = `pi-presence-watch — a live, grouped view of every pi session
 
@@ -55,6 +56,8 @@ Options:
   --json             emit the view model as JSON instead of formatted text
   --no-color         disable ANSI color
   --dir <path>       use this live dir instead of the default
+  --width <cols>     render as if the terminal were this many columns wide,
+                      instead of auto-detecting (also useful when piping)
   --pi-bin <path>    (resume only) path to the \`pi\` binary to relaunch with
                       (default: "pi", resolved via PATH)
   --all              (gc only) prune every dead session now, ignoring --ttl
@@ -81,6 +84,8 @@ interface Options {
   /** Absolute (preferred) or bare path to `pi`, for `resume`. */
   piBin: string;
   ttl?: string;
+  /** Explicit `--width` override; unset means auto-detect at render time. */
+  width?: number;
 }
 
 function parseOptions(argv: string[]): Options {
@@ -98,7 +103,26 @@ function parseOptions(argv: string[]): Options {
   if (piBinIdx >= 0 && argv[piBinIdx + 1]) opts.piBin = argv[piBinIdx + 1] as string;
   const ttlIdx = argv.indexOf("--ttl");
   if (ttlIdx >= 0 && argv[ttlIdx + 1]) opts.ttl = argv[ttlIdx + 1] as string;
+  const widthIdx = argv.indexOf("--width");
+  if (widthIdx >= 0 && argv[widthIdx + 1]) {
+    const n = Number.parseInt(argv[widthIdx + 1] as string, 10);
+    if (Number.isFinite(n) && n > 0) opts.width = n;
+  }
   return opts;
+}
+
+/**
+ * The width to render at: the explicit `--width` override if given, else the
+ * live terminal width, else `$COLUMNS`, else 80 (a sane default for pipes and
+ * other non-TTY output). Re-read on every call so live mode picks up pane
+ * resizes between refreshes.
+ */
+function effectiveWidth(explicit?: number): number {
+  if (explicit !== undefined) return explicit;
+  if (process.stdout.columns && process.stdout.columns > 0) return process.stdout.columns;
+  const env = Number.parseInt(process.env.COLUMNS ?? "", 10);
+  if (Number.isFinite(env) && env > 0) return env;
+  return 80;
 }
 
 function positionals(argv: string[]): string[] {
@@ -219,7 +243,10 @@ function runGc(opts: Options): number {
 function runOnce(opts: Options): void {
   const vm = buildViewModel(loadAllAndReconcile(opts.dir));
   if (opts.json) process.stdout.write(`${JSON.stringify(vm, null, 2)}\n`);
-  else process.stdout.write(`${renderView(vm, { color: opts.color }).join("\n")}\n`);
+  else {
+    const width = effectiveWidth(opts.width);
+    process.stdout.write(`${renderView(vm, { color: opts.color, width }).join("\n")}\n`);
+  }
 }
 
 function runLive(opts: Options): void {
@@ -229,8 +256,11 @@ function runLive(opts: Options): void {
       process.stdout.write(`${JSON.stringify(vm)}\n`);
       return;
     }
+    // Re-read the width every refresh (not hoisted out of the callback) so a
+    // pane resize between refreshes is picked up on the next repaint.
+    const width = effectiveWidth(opts.width);
     clearScreen();
-    process.stdout.write(`${renderView(vm, { color: opts.color }).join("\n")}\n`);
+    process.stdout.write(`${renderView(vm, { color: opts.color, width }).join("\n")}\n`);
     if (opts.color) process.stdout.write("\x1b[90m(watching — Ctrl-C to exit)\x1b[0m\n");
   });
   const shutdown = () => {

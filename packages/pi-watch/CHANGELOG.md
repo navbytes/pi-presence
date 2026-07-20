@@ -19,3 +19,16 @@
 - `gc --ttl <duration>` lets you override the default 24h prune threshold,
   e.g. `90s`, `30m`, `2h`, `1d`, or a bare number of seconds. `--all` still
   prunes every dead session immediately, ignoring `--ttl`.
+- Output now fits the terminal instead of being left for it to hard-wrap.
+  Every session was previously one unbounded line (up to 200+ display
+  columns even at `COLUMNS=40`), so the terminal wrapped it into a ragged,
+  flush-left block with no visual boundary between sessions — and the
+  highest-value line (why a session needs you) was buried at the very end of
+  that block. Rendering is now measured/truncated to the detected width
+  (new `--width`, else the live terminal width, else `$COLUMNS`, else 80):
+  fields drop lowest-value-first (model, then branch/`#id`, then cwd) as the
+  pane narrows, cwd tail-truncates to keep the leaf dir, a blocked reason is
+  always shown (inline, or on its own clearly indented line when it can't
+  fit), the counts header switches to compact chips below 60 cols instead of
+  wrapping mid-phrase, and the idle `✓` icon is padded so every group's names
+  line up in the same column.
