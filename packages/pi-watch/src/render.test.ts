@@ -294,6 +294,20 @@ describe("renderView width-responsiveness", () => {
     }
   });
 
+  it("drops lowest-priority chips (dormant, then idle, then running — never needs-you) to fit triple-digit counts", () => {
+    const heavy: ViewModel = {
+      generatedAt: 0,
+      counts: { needsYou: 300, running: 300, idle: 300, dormant: 300, total: 1200 },
+      sessions: [],
+    };
+    const header20 = renderView(heavy, { color: false, width: 20 })[0] as string;
+    const header40 = renderView(heavy, { color: false, width: 40 })[0] as string;
+    expect(displayWidth(header20)).toBeLessThanOrEqual(20);
+    expect(displayWidth(header40)).toBeLessThanOrEqual(40);
+    expect(header20).toContain("⛔300"); // needs-you chip always survives
+    expect(header40).toContain("⛔300");
+  });
+
   it("switches to compact chips below 60 cols and back to the full phrase at 60+", () => {
     const vm = model([session({ group: "running", state: "working" })]);
     expect(renderView(vm, { color: false, width: 59 })[0]).not.toContain("running");

@@ -241,12 +241,22 @@ function renderHeader(vm: ViewModel, color: boolean, width: number): string {
     const full = `pi-presence · ${c.needsYou} need you · ${c.running} running · ${c.idle} idle · ${c.dormant} dormant`;
     return paint(truncEnd(full, width), "bold", color);
   }
-  const chips: string[] = [];
-  if (c.needsYou > 0) chips.push(paint(`⛔${c.needsYou}`, GROUP_COLOR["needs-you"], color));
-  if (c.running > 0) chips.push(paint(`⚡${c.running}`, GROUP_COLOR.running, color));
-  if (c.idle > 0) chips.push(paint(`✓${c.idle}`, GROUP_COLOR.idle, color));
-  if (c.dormant > 0) chips.push(paint(`💤${c.dormant}`, GROUP_COLOR.dormant, color));
-  return chips.length > 0 ? chips.join(" ") : paint("pi-presence", "bold", color);
+  // Chips in priority order (needs-you first, never dropped); measure/drop on
+  // plain text, color only the survivors (same "truncate before color" rule
+  // as renderSessionLine).
+  const chips: MetaPart[] = [];
+  if (c.needsYou > 0) chips.push({ text: `⛔${c.needsYou}`, color: GROUP_COLOR["needs-you"] });
+  if (c.running > 0) chips.push({ text: `⚡${c.running}`, color: GROUP_COLOR.running });
+  if (c.idle > 0) chips.push({ text: `✓${c.idle}`, color: GROUP_COLOR.idle });
+  if (c.dormant > 0) chips.push({ text: `💤${c.dormant}`, color: GROUP_COLOR.dormant });
+
+  // Drop lowest-priority first (dormant, then idle, then running) — i.e. pop
+  // the tail — until the joined line fits; needs-you (index 0) never drops.
+  while (chips.length > 1 && displayWidth(chips.map((p) => p.text).join(" ")) > width) {
+    chips.pop();
+  }
+  if (chips.length === 0) return paint("pi-presence", "bold", color);
+  return chips.map((p) => paint(p.text, p.color, color)).join(" ");
 }
 
 /** Render the whole view model into lines. */

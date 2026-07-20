@@ -7,10 +7,11 @@
 - `--help`/`-h` now prints usage and exits 0; any unrecognized flag now prints
   a one-line error plus usage and exits 1. Previously both silently started
   the live TUI, which looked like a hang.
-- Reading no longer deletes anything. `--once`, `--json`, the live TUI,
-  `focus`, and `resume` used to silently unlink TTL-expired dormant state
-  files as a side effect of just reading them; pruning is now opt-in
-  (`{ prune: true }`) and only the explicit `gc` command sets it.
+- Reading no longer deletes anything. `--once`, `--json`, and the live TUI
+  used to silently unlink TTL-expired dormant state files as a side effect of
+  just reading them (`focus`/`resume` never did this — they never passed a GC
+  TTL); pruning is now opt-in (`{ prune: true }`) on all read paths, and only
+  the explicit `gc` command sets it.
 - The PID-reuse guard now works on macOS. It shelled out to `ps -o etimes=`
   (GNU/procps), which BSD `ps` on macOS rejects ("etimes: keyword not
   found"), so the start-time check silently no-op'd on the primary target

@@ -287,6 +287,14 @@ function main(): void {
     process.exit(1);
   }
 
+  const widthIdx = argv.indexOf("--width");
+  const rawWidth = widthIdx >= 0 ? argv[widthIdx + 1] : undefined;
+  if (rawWidth !== undefined && !(/^\d+$/.test(rawWidth) && Number(rawWidth) > 0)) {
+    process.stderr.write(`invalid --width value "${rawWidth}" (expected a positive integer)\n`);
+    printUsage(process.stderr);
+    process.exit(1);
+  }
+
   const opts = parseOptions(argv);
   const [command] = positionals(argv);
 
