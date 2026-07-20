@@ -47,11 +47,25 @@ interface Session {
   blockedLabel: string | null;
   updatedAt: number;
   sessionFile: string | null;
+  pinned: boolean;
+}
+
+// One row of the 📌 PINNED section (see PIN-SPEC.md). `session` is the
+// live/dormant match when the pin's state file still exists; `null` once
+// gone — a "ghost" row rendered from the pin's own cached name/cwd/sessionFile.
+interface PinnedRow {
+  sessionId: string;
+  sessionFile: string | null;
+  name: string;
+  cwd: string;
+  pinnedAt: number;
+  session: Session | null;
 }
 
 interface ViewModel {
   counts: { needsYou: number; running: number; idle: number; dormant: number; total: number };
   sessions: Session[];
+  pinned: PinnedRow[];
 }
 
 const ICON: Record<string, string> = { working: "⚡", blocked: "⛔", idle: "✓", dormant: "💤" };
@@ -113,6 +127,51 @@ export interface RenderOptions {
   piBin?: string;
 }
 
+/**
+ * One session's menu row + its Resume/Focus/Open-folder/Pin(Unpin) submenu.
+ * Shared by the normal per-group listing and the 📌 PINNED section, so a
+ * pinned session's row looks identical wherever it's rendered (design
+ * decision #3: "keeps its live icon/state inline").
+ */
+function renderSessionRow(s: Session, watch: string, pi: string, pinned: boolean): string[] {
+  const short = s.id.length > 6 ? s.id.slice(-6) : s.id;
+  const detail = s.state === "blocked" && s.blockedLabel ? ` — ${s.blockedLabel}` : "";
+  const tip = [s.cwd, s.branch, s.model].filter(Boolean).join("  ·  ");
+  const icon = ICON[s.state] ?? "•";
+  const lines: string[] = [
+    // Primary click: focus the terminal (falls back to copying the resume
+    // command to the clipboard — handled by `pi-presence-watch focus`).
+    `${icon} ${s.name} (${short})${detail} | shell=${watch} param0=focus param1=${param(s.id)} terminal=false tooltip=${param(tip)}`,
+  ];
+  if (s.sessionFile) {
+    // Resume dispatches through `pi-presence-watch resume`, which picks the
+    // right terminal app itself (PI_PRESENCE_TERMINAL, else the session's own
+    // recorded terminal, else Terminal.app) — terminal=false because we're
+    // launching the terminal ourselves, not asking xbar to run this inside one.
+    lines.push(
+      `-- Resume in Terminal | shell=${watch} param0=resume param1=${param(s.id)} param2=--pi-bin param3=${pi} terminal=false`,
+    );
+  }
+  lines.push(`-- Focus tab | shell=${watch} param0=focus param1=${param(s.id)} terminal=false`);
+  lines.push(`-- Open folder | shell=open param0=${param(s.cwd)} terminal=false`);
+  lines.push(
+    pinned
+      ? `-- Unpin | shell=${watch} param0=unpin param1=${param(s.id)} terminal=false refresh=true`
+      : `-- Pin | shell=${watch} param0=pin param1=${param(s.id)} terminal=false refresh=true`,
+  );
+  return lines;
+}
+
+/** A ghost pinned row (state file gone): no live process, so only Resume + Unpin (PIN-SPEC AC7). */
+function renderGhostRow(row: PinnedRow, watch: string, pi: string): string[] {
+  const short = row.sessionId.length > 6 ? row.sessionId.slice(-6) : row.sessionId;
+  return [
+    `💤 ${row.name} (${short}) | color=gray tooltip=${param(row.cwd)}`,
+    `-- Resume in Terminal | shell=${watch} param0=resume param1=${param(row.sessionId)} param2=--pi-bin param3=${pi} terminal=false`,
+    `-- Unpin | shell=${watch} param0=unpin param1=${param(row.sessionId)} terminal=false refresh=true`,
+  ];
+}
+
 /** Render a view model into xbar/SwiftBar menu lines (title line(s), `---`, body). */
 export function renderMenu(vm: ViewModel, opts: RenderOptions = {}): string[] {
   const watch = param(opts.watchBin ?? "pi-presence-watch");
@@ -128,12 +187,27 @@ export function renderMenu(vm: ViewModel, opts: RenderOptions = {}): string[] {
 
   lines.push("---");
 
+  // 📌 PINNED, above NEEDS YOU (design decision #3). A pinned session appears
+  // here only, not duplicated in its state group below.
+  const pinned = vm.pinned ?? [];
+  if (pinned.length > 0) {
+    lines.push(`📌 PINNED (${pinned.length}) | header=true`);
+    for (const row of pinned) {
+      lines.push(
+        ...(row.session
+          ? renderSessionRow(row.session, watch, pi, true)
+          : renderGhostRow(row, watch, pi)),
+      );
+    }
+  }
+
   if (vm.sessions.length === 0) {
     lines.push("No pi sessions | color=gray");
   }
 
   const byGroup = new Map<string, Session[]>();
   for (const s of vm.sessions) {
+    if (s.pinned) continue; // shown in 📌 PINNED only
     const list = byGroup.get(s.group) ?? [];
     list.push(s);
     byGroup.set(s.group, list);
@@ -143,38 +217,16 @@ export function renderMenu(vm: ViewModel, opts: RenderOptions = {}): string[] {
     const list = byGroup.get(group);
     if (!list || list.length === 0) continue;
     lines.push(`${GROUP_TITLE[group]} (${list.length}) | header=true`);
-    for (const s of list) {
-      const short = s.id.length > 6 ? s.id.slice(-6) : s.id;
-      const detail = s.state === "blocked" && s.blockedLabel ? ` — ${s.blockedLabel}` : "";
-      const tip = [s.cwd, s.branch, s.model].filter(Boolean).join("  ·  ");
-      const icon = ICON[s.state] ?? "•";
-      // Primary click: focus the terminal (falls back to copying the resume
-      // command to the clipboard — handled by `pi-presence-watch focus`).
-      lines.push(
-        `${icon} ${s.name} (${short})${detail} | shell=${watch} param0=focus param1=${param(s.id)} terminal=false tooltip=${param(tip)}`,
-      );
-      if (s.sessionFile) {
-        // Resume dispatches through `pi-presence-watch resume`, which picks the
-        // right terminal app itself (PI_PRESENCE_TERMINAL, else the session's
-        // own recorded terminal, else Terminal.app) — terminal=false because
-        // we're launching the terminal ourselves, not asking xbar to run this
-        // command inside one.
-        lines.push(
-          `-- Resume in Terminal | shell=${watch} param0=resume param1=${param(s.id)} param2=--pi-bin param3=${pi} terminal=false`,
-        );
-      }
-      lines.push(`-- Focus tab | shell=${watch} param0=focus param1=${param(s.id)} terminal=false`);
-      lines.push(`-- Open folder | shell=open param0=${param(s.cwd)} terminal=false`);
-    }
+    for (const s of list) lines.push(...renderSessionRow(s, watch, pi, false));
   }
 
   lines.push("---");
-  // `gc` (no --all) only prunes dormant files past the 24h TTL, not every
-  // dormant session shown above — count just the gc-eligible ones so the
-  // number matches what the click actually prunes.
+  // `gc` (no --all) only prunes dormant files past the 24h TTL — and never a
+  // pinned one — so count just the gc-eligible ones, matching what the click
+  // actually prunes.
   const now = Date.now();
   const gcEligible = vm.sessions.filter(
-    (s) => s.state === "dormant" && now - s.updatedAt > GC_TTL_MS,
+    (s) => s.state === "dormant" && !s.pinned && now - s.updatedAt > GC_TTL_MS,
   ).length;
   if (gcEligible > 0) {
     lines.push(

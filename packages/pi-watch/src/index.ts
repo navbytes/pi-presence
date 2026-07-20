@@ -4,9 +4,19 @@ import {
   getLiveDir,
   loadAllAndReconcile,
   normalizeTerminalName,
+  pinsFilePath,
+  readPinsFile,
   watchLive,
 } from "@pi-presence/shared";
-import { performFocus, performResume, resolveSession } from "./commands.js";
+import {
+  ghostAsViewSession,
+  performFocus,
+  performPin,
+  performResume,
+  performUnpin,
+  resolvePinned,
+  resolveSession,
+} from "./commands.js";
 import { parseDuration } from "./duration.js";
 import { renderView } from "./render.js";
 
@@ -18,9 +28,12 @@ import { renderView } from "./render.js";
 //   pi-watch --json                            # stream view-model JSON
 //   pi-watch focus <query>                     # focus a session's terminal (or copy its resume)
 //   pi-watch resume <query> [--pi-bin <path>]  # open a new terminal running `pi --session ...`
+//   pi-watch pin <query>                       # pin a session — see PIN-SPEC.md
+//   pi-watch unpin <query>                     # unpin a session (live or ghost)
 //   pi-watch gc [--all] [--ttl <duration>]     # prune dormant state files
 //
-// Reading (default/--once/--json/focus/resume) never mutates disk — only `gc` does.
+// Reading (default/--once/--json/focus/resume) never mutates disk — only
+// `gc`, `pin`, and `unpin` do (the latter two only ever touch presence-pins.json).
 // ---------------------------------------------------------------------------
 
 const KNOWN_FLAGS = new Set([
@@ -49,7 +62,12 @@ Usage:
                                                 its resume command to the clipboard
   pi-presence-watch resume <query> [options]   open a new terminal running \`pi --session ...\`
                                                 for a dead/dormant session, or copy that command
-  pi-presence-watch gc [--all] [--ttl <dur>]   prune dormant (dead) session files
+  pi-presence-watch pin <query>                pin a session: shows in the Vee menu's 📌 PINNED
+                                                section and is never pruned by gc until unpinned
+  pi-presence-watch unpin <query>              unpin a session (works on a "ghost" pin too, whose
+                                                state file is gone — see gc note below)
+  pi-presence-watch gc [--all] [--ttl <dur>]   prune dormant (dead) session files (never a
+                                                pinned one, regardless of --all/--ttl)
 
 Options:
   --once             print once and exit instead of watching
@@ -71,8 +89,10 @@ Environment:
   PI_PRESENCE_TERMINAL   terminal app to use for focus/resume (iterm2 | ghostty |
                           terminal), overriding the session's recorded terminal
 
-focus/resume <query> match, most specific first: exact session id, short-id
-suffix, exact session name, then a substring of the session name or cwd.
+focus/resume/pin <query> match, most specific first: exact session id,
+short-id suffix, exact session name, then a substring of the session name or
+cwd. unpin <query> matches the same way, but only against pinned sessions
+(including ghosts — a pin whose state file is gone).
 `;
 
 interface Options {
@@ -161,6 +181,13 @@ function clearScreen(): void {
   process.stdout.write("\x1b[H\x1b[2J\x1b[3J");
 }
 
+/** Load the pin store once and build the view model from it — used by every command that needs `vm.pinned`. */
+function buildPinnedViewModel(opts: Options) {
+  const pins = readPinsFile(pinsFilePath(opts.dir));
+  const vm = buildViewModel(loadAllAndReconcile(opts.dir, { pins }), Date.now(), pins);
+  return { vm, pins };
+}
+
 function runFocus(query: string, opts: Options): number {
   const vm = buildViewModel(loadAllAndReconcile(opts.dir));
   const res = resolveSession(vm, query);
@@ -187,8 +214,18 @@ function runFocus(query: string, opts: Options): number {
 }
 
 function runResume(query: string, opts: Options): number {
-  const vm = buildViewModel(loadAllAndReconcile(opts.dir));
-  const res = resolveSession(vm, query);
+  const { vm } = buildPinnedViewModel(opts);
+  let res = resolveSession(vm, query);
+  if (res.kind === "none") {
+    // Not a live/dormant session — fall back to a ghost pin (state file gone)
+    // so its Resume action keeps working, per PIN-SPEC AC7.
+    const ghostRes = resolvePinned(vm, query);
+    if (ghostRes.kind === "found")
+      res = { kind: "found", session: ghostAsViewSession(ghostRes.row) };
+    else if (ghostRes.kind === "ambiguous") {
+      res = { kind: "ambiguous", matches: ghostRes.matches.map(ghostAsViewSession) };
+    }
+  }
   if (res.kind === "none") {
     process.stderr.write(`no session matching "${query}"\n`);
     return 1;
@@ -232,16 +269,66 @@ function runGc(opts: Options): number {
   }
   if (opts.all) ttlMs = 1; // prune anything dead, regardless of age
 
-  const before = loadAllAndReconcile(opts.dir).length;
-  loadAllAndReconcile(opts.dir, { gcTtlMs: ttlMs, prune: true });
-  const after = loadAllAndReconcile(opts.dir).length;
+  const pins = readPinsFile(pinsFilePath(opts.dir));
+  const before = loadAllAndReconcile(opts.dir, { pins }).length;
+  const result = loadAllAndReconcile(opts.dir, { gcTtlMs: ttlMs, prune: true, pins });
+  const after = loadAllAndReconcile(opts.dir, { pins }).length;
   const pruned = Math.max(0, before - after);
-  process.stdout.write(`pruned ${pruned} dormant session file${pruned === 1 ? "" : "s"}\n`);
+  // Pinned + dead + past the TTL is exactly what would have been pruned above
+  // had it not been protected — count it so gc's output isn't silent about it.
+  const skippedPinned = result.filter(
+    (s) => s.pinned && s.liveState === "dormant" && s.ageMs > ttlMs,
+  ).length;
+  const parts = [`pruned ${pruned} dormant session file${pruned === 1 ? "" : "s"}`];
+  if (skippedPinned > 0) {
+    parts.push(`skipped ${skippedPinned} pinned session${skippedPinned === 1 ? "" : "s"}`);
+  }
+  process.stdout.write(`${parts.join(", ")}\n`);
+  return 0;
+}
+
+function runPin(query: string, opts: Options): number {
+  const pinsPath = pinsFilePath(opts.dir);
+  const { vm } = buildPinnedViewModel(opts);
+  const res = resolveSession(vm, query);
+  if (res.kind === "none") {
+    process.stderr.write(`no session matching "${query}"\n`);
+    return 1;
+  }
+  if (res.kind === "ambiguous") {
+    process.stderr.write(`"${query}" matches multiple sessions:\n`);
+    for (const s of res.matches) process.stderr.write(`  ${s.name}  #${s.id}  ${s.cwd}\n`);
+    return 1;
+  }
+  const result = performPin(res.session, pinsPath);
+  if (!result.ok) {
+    process.stderr.write(`${result.error}\n`);
+    return 1;
+  }
+  process.stdout.write(`pinned ${res.session.name}\n`);
+  return 0;
+}
+
+function runUnpin(query: string, opts: Options): number {
+  const pinsPath = pinsFilePath(opts.dir);
+  const { vm } = buildPinnedViewModel(opts);
+  const res = resolvePinned(vm, query);
+  if (res.kind === "none") {
+    process.stderr.write(`no pinned session matching "${query}"\n`);
+    return 1;
+  }
+  if (res.kind === "ambiguous") {
+    process.stderr.write(`"${query}" matches multiple pinned sessions:\n`);
+    for (const r of res.matches) process.stderr.write(`  ${r.name}  #${r.sessionId}  ${r.cwd}\n`);
+    return 1;
+  }
+  performUnpin(res.row, pinsPath);
+  process.stdout.write(`unpinned ${res.row.name}\n`);
   return 0;
 }
 
 function runOnce(opts: Options): void {
-  const vm = buildViewModel(loadAllAndReconcile(opts.dir));
+  const { vm } = buildPinnedViewModel(opts);
   if (opts.json) process.stdout.write(`${JSON.stringify(vm, null, 2)}\n`);
   else {
     const width = effectiveWidth(opts.width);
@@ -251,7 +338,12 @@ function runOnce(opts: Options): void {
 
 function runLive(opts: Options): void {
   const dispose = watchLive(opts.dir, (snaps) => {
-    const vm = buildViewModel(snaps);
+    // Read fresh on every tick: watchLive's options are fixed at setup time,
+    // so this is the only way pin/unpin done while live is running gets
+    // picked up (loadAllAndReconcile itself auto-loads pins for gc-protection
+    // + `snapshot.pinned`; this is only for `vm.pinned`'s ghost-inclusive data).
+    const pins = readPinsFile(pinsFilePath(opts.dir));
+    const vm = buildViewModel(snaps, Date.now(), pins);
     if (opts.json) {
       process.stdout.write(`${JSON.stringify(vm)}\n`);
       return;
@@ -305,6 +397,14 @@ function main(): void {
   if (command === "resume") {
     const query = positionals(argv).slice(1).join(" ");
     process.exit(runResume(query, opts));
+  }
+  if (command === "pin") {
+    const query = positionals(argv).slice(1).join(" ");
+    process.exit(runPin(query, opts));
+  }
+  if (command === "unpin") {
+    const query = positionals(argv).slice(1).join(" ");
+    process.exit(runUnpin(query, opts));
   }
   if (command === "gc") {
     process.exit(runGc(opts));

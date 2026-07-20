@@ -19,11 +19,15 @@ npx pi-presence-watch focus <query>       # focus a session's terminal, or copy 
 npx pi-presence-watch resume <query> [--pi-bin <path>]
                                           # open a new terminal running `pi --session ...`
                                           # for a dead/dormant session (or copy that command).
+npx pi-presence-watch pin <query>         # pin a session — 📌 in the TUI, its own menu
+                                          # section in the Vee plugin, never gc'd until unpinned.
+npx pi-presence-watch unpin <query>       # unpin a session (also resolves a "ghost" pin
+                                          # whose state file is already gone).
 npx pi-presence-watch gc [--all] [--ttl <duration>]
                                           # prune dormant state files (past the 24h
                                           # default TTL; --ttl overrides it, e.g. 90s,
                                           # 30m, 2h, 1d; --all prunes every dead
-                                          # session immediately)
+                                          # session immediately — but never a pinned one)
 ```
 
 Any unrecognized flag prints a one-line error and the usage text, then exits 1
@@ -41,6 +45,19 @@ survives on disk however old it is. Only the explicit `gc` command (with
 (iterm2 | ghostty | terminal), then the session's own recorded terminal, then
 Terminal.app. When nothing can be opened (e.g. no GUI, unknown terminal), the
 resume command is copied to the clipboard instead.
+
+**Pinning** keeps a session reachable across dormancy. `pin`/`unpin <query>`
+resolve the same way as `focus`/`resume` (id / short-id / name / cwd). Pins
+live in `<agentDir>/presence-pins.json` (a sibling of `live/`, capped at 20,
+plain JSON so they survive a restart) and are never treated as a session file
+by any reader. A pinned session's state file is never pruned by `gc` — with
+or without `--all`/`--ttl` — until it's unpinned; `gc`'s output reports how
+many pinned sessions it skipped. If a pin's backing file disappears outside
+of `gc` (a manual `rm`, or an id/file that didn't carry over on resume), it
+degrades to a "ghost" entry — cached name/cwd, resumable, unpin-able — rather
+than erroring or vanishing. The TUI prefixes a pinned row with `📌` in its
+usual group; the [Vee plugin](../vee-plugin) additionally gives pins their
+own `📌 PINNED` menu section.
 
 **Every line fits the terminal.** Output is measured and reshaped to the
 detected width (`--width`, else the live terminal width, else `$COLUMNS`, else

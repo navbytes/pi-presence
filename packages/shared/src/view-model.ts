@@ -1,4 +1,5 @@
 import { basename } from "node:path";
+import { PINS_VERSION, type PinsFile, pinMatches } from "./pins.js";
 import type { SessionSnapshot } from "./reconcile.js";
 import type { LiveState, TerminalInfo } from "./schema.js";
 
@@ -50,6 +51,8 @@ export interface ViewSession {
   path: string;
   sessionFile: string | null;
   terminal: TerminalInfo;
+  /** Whether this session is pinned. TUI readers prefix these with 📌; grouping is unchanged. */
+  pinned: boolean;
 }
 
 export interface ViewCounts {
@@ -60,11 +63,30 @@ export interface ViewCounts {
   total: number;
 }
 
+/**
+ * One row of the dedicated pinned section (Vee-only this iteration; see
+ * PIN-SPEC.md). `session` is the live/dormant match when the pin's backing
+ * state file still exists; `null` once it's gone — a "ghost" row rendered
+ * from the pin's own cached `name`/`cwd`/`sessionFile` (Resume + Unpin only).
+ */
+export interface PinnedRow {
+  sessionId: string;
+  sessionFile: string | null;
+  /** The live session's current name, or the pin's cached name once ghosted. */
+  name: string;
+  /** The live session's current cwd, or the pin's cached cwd once ghosted. */
+  cwd: string;
+  pinnedAt: number;
+  session: ViewSession | null;
+}
+
 export interface ViewModel {
   generatedAt: number;
   counts: ViewCounts;
   /** Sorted by group priority, then most-recently-updated first. */
   sessions: ViewSession[];
+  /** The 📌 PINNED section: every pin, newest-pinned-first, live or ghost. */
+  pinned: PinnedRow[];
 }
 
 function deriveName(name: string | null | undefined, cwd: string, id: string): string {
@@ -75,7 +97,11 @@ function deriveName(name: string | null | undefined, cwd: string, id: string): s
 }
 
 /** Build the sorted, grouped, counted view model from reconciled snapshots. */
-export function buildViewModel(snapshots: SessionSnapshot[], now: number = Date.now()): ViewModel {
+export function buildViewModel(
+  snapshots: SessionSnapshot[],
+  now: number = Date.now(),
+  pins: PinsFile = { version: PINS_VERSION, pins: [] },
+): ViewModel {
   const sessions: ViewSession[] = snapshots.map((s) => {
     const group = groupForState(s.liveState);
     return {
@@ -92,6 +118,7 @@ export function buildViewModel(snapshots: SessionSnapshot[], now: number = Date.
       path: s.path,
       sessionFile: s.file.sessionFile ?? null,
       terminal: s.file.terminal ?? {},
+      pinned: s.pinned,
     };
   });
 
@@ -116,5 +143,24 @@ export function buildViewModel(snapshots: SessionSnapshot[], now: number = Date.
     else counts.dormant++;
   }
 
-  return { generatedAt: now, counts, sessions };
+  // Newest-pinned-first (design decision #3). `live` prefers the session's
+  // CURRENT name/cwd over the pin's cached copy; only a ghost (no match) ever
+  // falls back to the cached fields.
+  const pinnedRows: PinnedRow[] = pins.pins
+    .map((p) => {
+      const live = sessions.find((sess) =>
+        pinMatches(p, { sessionFile: sess.sessionFile, sessionId: sess.id }),
+      );
+      return {
+        sessionId: p.sessionId,
+        sessionFile: p.sessionFile,
+        name: live?.name ?? p.name,
+        cwd: live?.cwd ?? p.cwd,
+        pinnedAt: p.pinnedAt,
+        session: live ?? null,
+      };
+    })
+    .sort((a, b) => b.pinnedAt - a.pinnedAt);
+
+  return { generatedAt: now, counts, sessions, pinned: pinnedRows };
 }

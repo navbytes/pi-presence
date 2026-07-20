@@ -1,7 +1,7 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { expandTilde, getAgentDir, getLiveDir, stateFilePath } from "./paths.js";
+import { expandTilde, getAgentDir, getLiveDir, pinsFilePath, stateFilePath } from "./paths.js";
 
 describe("path resolution", () => {
   it("expands tilde", () => {
@@ -32,5 +32,13 @@ describe("path resolution", () => {
 
   it("builds state file paths", () => {
     expect(stateFilePath("abc123", "/live")).toBe(join("/live", "abc123.json"));
+  });
+
+  // AC3: presence-pins.json lives at <agentDir>/presence-pins.json, a sibling of live/.
+  it("AC3: pin store path is a sibling of the live dir", () => {
+    expect(pinsFilePath("/a/live")).toBe(join("/a", "presence-pins.json"));
+    expect(pinsFilePath(join(homedir(), ".pi", "agent", "live"))).toBe(
+      join(homedir(), ".pi", "agent", "presence-pins.json"),
+    );
   });
 });

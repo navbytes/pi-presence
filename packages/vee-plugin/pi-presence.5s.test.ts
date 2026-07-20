@@ -13,11 +13,24 @@ function session(overrides: Record<string, unknown> = {}) {
     blockedLabel: null,
     updatedAt: 0,
     sessionFile: "/x/web.jsonl",
+    pinned: false,
     ...overrides,
   };
 }
 
-function vm(sessions: ReturnType<typeof session>[]) {
+function pinnedRow(overrides: Record<string, unknown> = {}) {
+  return {
+    sessionId: "aaaaaa111111",
+    sessionFile: "/x/web.jsonl",
+    name: "web",
+    cwd: "/home/u/web",
+    pinnedAt: 0,
+    session: null,
+    ...overrides,
+  };
+}
+
+function vm(sessions: ReturnType<typeof session>[], pinned: ReturnType<typeof pinnedRow>[] = []) {
   const counts = { needsYou: 0, running: 0, idle: 0, dormant: 0, total: sessions.length };
   for (const s of sessions) {
     if (s.group === "needs-you") counts.needsYou++;
@@ -25,7 +38,7 @@ function vm(sessions: ReturnType<typeof session>[]) {
     else if (s.group === "idle") counts.idle++;
     else counts.dormant++;
   }
-  return { counts, sessions };
+  return { counts, sessions, pinned };
 }
 
 describe("param", () => {
@@ -142,6 +155,110 @@ describe("renderMenu with resolved absolute bins", () => {
   });
 });
 
+describe("📌 PINNED section", () => {
+  // AC1/AC3: a pinned session shows in a top-of-menu 📌 PINNED section, above NEEDS YOU.
+  it("AC1: renders above NEEDS YOU with its live icon/state and an Unpin action", () => {
+    const liveSession = session({
+      id: "b1",
+      name: "blk",
+      group: "needs-you",
+      state: "blocked",
+      pinned: true,
+    });
+    // A second, unpinned needs-you session so "NEEDS YOU" actually appears — the
+    // pinned one is excluded from it (see the next test).
+    const unpinnedNeedsYou = session({
+      id: "b2",
+      name: "other",
+      group: "needs-you",
+      state: "blocked",
+    });
+    const text = renderMenu(
+      vm(
+        [liveSession, unpinnedNeedsYou],
+        [pinnedRow({ sessionId: "b1", name: "blk", session: liveSession })],
+      ),
+    ).join("\n");
+    expect(text.indexOf("📌 PINNED (1) | header=true")).toBeLessThan(text.indexOf("NEEDS YOU"));
+    expect(text).toContain("⛔ blk (b1)");
+    expect(text).toContain("-- Unpin | shell=pi-presence-watch param0=unpin param1=b1");
+  });
+
+  // AC2: unpinning removes the row from 📌 PINNED; the session stays visible in its
+  // normal group throughout (modeled here as the before/after view models a real
+  // unpin produces — pinned:false and no entry in `pinned` once the store is updated).
+  it("AC2: after unpinning, the row leaves 📌 PINNED and stays in its normal group", () => {
+    const pinnedSession = session({
+      id: "b1",
+      name: "blk",
+      group: "needs-you",
+      state: "blocked",
+      pinned: true,
+    });
+    const beforeText = renderMenu(
+      vm([pinnedSession], [pinnedRow({ sessionId: "b1", name: "blk", session: pinnedSession })]),
+    ).join("\n");
+    expect(beforeText).toContain("📌 PINNED (1)");
+    expect(beforeText).not.toContain("NEEDS YOU (1)");
+
+    const unpinnedSession = { ...pinnedSession, pinned: false };
+    const afterText = renderMenu(vm([unpinnedSession], [])).join("\n");
+    expect(afterText).not.toContain("PINNED");
+    expect(afterText).toContain("NEEDS YOU (1)");
+    expect(afterText).toContain("⛔ blk (b1)");
+  });
+
+  // Design decision #3: a pinned session appears in the PINNED section ONLY, not duplicated in its group.
+  it("does not duplicate a pinned session in its normal state group", () => {
+    const liveSession = session({
+      id: "b1",
+      name: "blk",
+      group: "needs-you",
+      state: "blocked",
+      pinned: true,
+    });
+    const text = renderMenu(
+      vm([liveSession], [pinnedRow({ sessionId: "b1", name: "blk", session: liveSession })]),
+    ).join("\n");
+    expect(text).not.toContain("NEEDS YOU (1)");
+    expect((text.match(/blk \(b1\)/g) ?? []).length).toBe(1);
+  });
+
+  it("shows a Pin action (not Unpin) for an unpinned session", () => {
+    const text = renderMenu(vm([session({ id: "s1" })])).join("\n");
+    expect(text).toContain("-- Pin | shell=pi-presence-watch param0=pin param1=s1");
+    expect(text).not.toContain("Unpin");
+  });
+
+  // AC7: a ghost pin (state file gone) renders with only Resume + Unpin — never a crash.
+  it("AC7: renders a ghost row (no live session) with only Resume + Unpin", () => {
+    const text = renderMenu(
+      vm([], [pinnedRow({ sessionId: "g1", name: "old-task", cwd: "/x/old", session: null })]),
+    ).join("\n");
+    expect(text).toContain("💤 old-task (g1)");
+    expect(text).toContain(
+      "-- Resume in Terminal | shell=pi-presence-watch param0=resume param1=g1 param2=--pi-bin param3=pi terminal=false",
+    );
+    expect(text).toContain("-- Unpin | shell=pi-presence-watch param0=unpin param1=g1");
+    expect(text).not.toContain("Focus tab");
+    expect(text).not.toContain("Open folder");
+    expect(text).not.toContain("-- Pin ");
+  });
+
+  it("omits the section entirely when nothing is pinned", () => {
+    const text = renderMenu(vm([session({})])).join("\n");
+    expect(text).not.toContain("PINNED");
+  });
+
+  it("tolerates a missing `pinned` field (older CLI JSON) without crashing", () => {
+    const legacyVm = {
+      counts: { needsYou: 0, running: 1, idle: 0, dormant: 0, total: 1 },
+      sessions: [session({})],
+    };
+    expect(() => renderMenu(legacyVm as never)).not.toThrow();
+  });
+});
+
 describe("Prune sessions dormant >24h action", () => {
   it("counts only dormant sessions past the 24h gc TTL, matching what gc actually prunes", () => {
     const text = renderMenu(
@@ -157,6 +274,22 @@ describe("Prune sessions dormant >24h action", () => {
       vm([
         session({ id: "d1", state: "dormant", group: "dormant", updatedAt: Date.now() - 60_000 }),
       ]),
+    ).join("\n");
+    expect(text).not.toContain("Prune sessions dormant");
+  });
+
+  // gc never prunes a pinned file regardless of TTL, so a pinned dormant session must not
+  // inflate this count either — it stays truthful about what the click actually prunes.
+  it("excludes a TTL-expired dormant session that is pinned (gc would skip it)", () => {
+    const pinnedDormant = session({
+      id: "d1",
+      state: "dormant",
+      group: "dormant",
+      updatedAt: 0,
+      pinned: true,
+    });
+    const text = renderMenu(
+      vm([pinnedDormant], [pinnedRow({ sessionId: "d1", session: pinnedDormant })]),
     ).join("\n");
     expect(text).not.toContain("Prune sessions dormant");
   });

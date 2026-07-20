@@ -1,5 +1,5 @@
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 // ---------------------------------------------------------------------------
 // Live-directory resolution for pi-free readers.
@@ -18,6 +18,7 @@ const DEFAULT_CONFIG_DIR = ".pi";
 const AGENT_DIR_ENV = "PI_CODING_AGENT_DIR";
 const LIVE_DIR_ENV = "PI_PRESENCE_LIVE_DIR";
 const LIVE_SUBDIR = "live";
+const PINS_FILENAME = "presence-pins.json";
 
 /** Expand a leading `~` / `~/` to the user's home directory. */
 export function expandTilde(p: string): string {
@@ -43,4 +44,12 @@ export function getLiveDir(env: NodeJS.ProcessEnv = process.env): string {
 /** Absolute path of the state file for a given session id. */
 export function stateFilePath(sessionId: string, liveDir: string = getLiveDir()): string {
   return join(liveDir, `${sessionId}.json`);
+}
+
+/**
+ * Absolute path of the pin store: a sibling of `live/` (not inside it), so gc
+ * and the readers' directory scan never treat it as a session file.
+ */
+export function pinsFilePath(liveDir: string = getLiveDir()): string {
+  return join(dirname(liveDir), PINS_FILENAME);
 }

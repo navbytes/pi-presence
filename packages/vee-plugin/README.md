@@ -31,7 +31,8 @@ cadence.
 
 - **Menu-bar title:** `⛔<n>` (red) when sessions need you, `⚡<n>` when running, `✓` when calm.
 - **Dropdown:** sessions grouped by state; each item shows name, short id, model/branch (tooltip), and a blocked reason when waiting.
-- **Click a session → focus its terminal tab** (via `pi-presence-watch focus`, which falls back to copying the `pi --session …` resume command to the clipboard). Each session's submenu also has **Resume in Terminal** and **Open folder**.
+- **Click a session → focus its terminal tab** (via `pi-presence-watch focus`, which falls back to copying the `pi --session …` resume command to the clipboard). Each session's submenu also has **Resume in Terminal**, **Open folder**, and **Pin**.
+- **📌 PINNED section** at the top of the menu, above NEEDS YOU: click **Pin** on any session to keep it there — with its live icon/state — until you **Unpin** it. A pinned session shows in this section only, not duplicated in its state group. If a pin's session ever disappears from disk outside of `gc` (a manual `rm`, or a resume that didn't carry the id/file over as expected), it stays in this section as a dimmed "ghost" row with just **Resume in Terminal** and **Unpin** — never an error, never silently gone.
 - Declares its capabilities to Vee via `<vee.exec>` / `<vee.filter>` / `<vee.shortcut>` tags, and enables the searchable filter panel (⌘⇧P).
 
 ## Configuration
