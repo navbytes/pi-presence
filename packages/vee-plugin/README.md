@@ -1,13 +1,14 @@
 # pi-presence — Vee menu-bar plugin
 
-A [Vee](https://github.com/navbytes/vee) plugin (also xbar / SwiftBar compatible)
-that shows every pi session in your macOS menu bar — **needs-you / running /
-idle / dormant** — with click-to-focus.
+Every [pi](https://pi.dev) session in your macOS menu bar — grouped
+**needs-you / running / idle / dormant**, with click-to-focus — as a **single
+copyable script** ([`pi-presence.5s.ts`](./pi-presence.5s.ts)). Works with
+[Vee](https://github.com/navbytes/vee), xbar, and SwiftBar.
 
-It's a **single copyable script** ([`pi-presence.5s.ts`](./pi-presence.5s.ts)).
-It renders the output of `pi-presence-watch --once --json` into the xbar menu
-format, so all the reader logic (liveness, grouping, focus) is reused from the
-published CLI rather than duplicated.
+The script renders `pi-presence-watch --once --json` into the xbar menu format,
+so all the reader logic (liveness, grouping, focus) is reused from the
+[published CLI](https://www.npmjs.com/package/pi-presence-watch) rather than
+duplicated. Part of [pi-presence](https://github.com/navbytes/pi-presence#readme).
 
 ## Install
 
