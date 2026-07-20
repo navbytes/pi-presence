@@ -5,7 +5,8 @@
 // <xbar.author.github>navbytes</xbar.author.github>
 // <xbar.version>0.1.1</xbar.version>
 // <xbar.dependencies>node,pi-presence-watch</xbar.dependencies>
-// <xbar.var>string(PI_PRESENCE_WATCH_BIN=): Absolute path to the pi-presence-watch binary, if it isn't auto-found.</xbar.var>
+// <xbar.var>string(PI_PRESENCE_WATCH_BIN=): Absolute path to the pi-presence-watch binary, if it isn't auto-found.
+// <xbar.var>string(PI_PRESENCE_TERMINAL=): Terminal app to open on Resume (e.g. "iTerm", "Ghostty", "Terminal"). Defaults to the session's own recorded terminal, then Terminal.app.
 // <vee.exec>Runs `pi-presence-watch` to read session state and focus terminals.</vee.exec>
 // <vee.filter>true</vee.filter>
 // <vee.shortcut>cmd+shift+p</vee.shortcut>
@@ -149,8 +150,13 @@ export function renderMenu(vm: ViewModel, opts: RenderOptions = {}): string[] {
         `${icon} ${s.name} (${short})${detail} | shell=${watch} param0=focus param1=${param(s.id)} terminal=false tooltip=${param(tip)}`,
       );
       if (s.sessionFile) {
+        // Resume dispatches through `pi-presence-watch resume`, which picks the
+        // right terminal app itself (PI_PRESENCE_TERMINAL, else the session's
+        // own recorded terminal, else Terminal.app) — terminal=false because
+        // we're launching the terminal ourselves, not asking xbar to run this
+        // command inside one.
         lines.push(
-          `-- Resume in Terminal | shell=${pi} param0=--session param1=${param(s.sessionFile)} terminal=true`,
+          `-- Resume in Terminal | shell=${watch} param0=resume param1=${param(s.id)} param2=--pi-bin param3=${pi} terminal=false`,
         );
       }
       lines.push(`-- Focus tab | shell=${watch} param0=focus param1=${param(s.id)} terminal=false`);
@@ -159,6 +165,11 @@ export function renderMenu(vm: ViewModel, opts: RenderOptions = {}): string[] {
   }
 
   lines.push("---");
+  if (c.dormant > 0) {
+    lines.push(
+      `Prune dormant sessions (${c.dormant}) | shell=${watch} param0=gc terminal=false refresh=true`,
+    );
+  }
   lines.push("Refresh | refresh=true");
   return lines;
 }
