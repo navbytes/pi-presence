@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { REUSE_TOLERANCE_MS, isAlive, readProcStartTime, readSelfStartTime } from "./liveness.js";
+import {
+  REUSE_TOLERANCE_MS,
+  isAlive,
+  parseBsdElapsedTime,
+  readProcStartTime,
+  readSelfStartTime,
+} from "./liveness.js";
 
 function killThrowing(code: string) {
   return () => {
@@ -66,5 +72,43 @@ describe("start-time estimation", () => {
 
   it("returns undefined for an impossible pid", () => {
     expect(readProcStartTime(2 ** 30)).toBeUndefined();
+  });
+});
+
+// D5: `ps -o etimes=` (GNU/procps) isn't supported by BSD `ps` on macOS
+// ("etimes: keyword not found"), so readProcStartTime falls back to parsing
+// `ps -o etime=`'s `[[dd-]hh:]mm:ss` format. This parser is pure and covers
+// that fallback in isolation.
+describe("parseBsdElapsedTime", () => {
+  it("parses a bare seconds count", () => {
+    expect(parseBsdElapsedTime("05")).toBe(5);
+    expect(parseBsdElapsedTime("0")).toBe(0);
+  });
+
+  it("parses mm:ss", () => {
+    expect(parseBsdElapsedTime("1:23")).toBe(83);
+  });
+
+  it("parses hh:mm:ss", () => {
+    expect(parseBsdElapsedTime("12:34:56")).toBe(12 * 3600 + 34 * 60 + 56);
+  });
+
+  it("parses dd-hh:mm:ss", () => {
+    expect(parseBsdElapsedTime("3-01:02:03")).toBe(3 * 86400 + 1 * 3600 + 2 * 60 + 3);
+  });
+
+  it("tolerates surrounding whitespace (ps right-aligns its column)", () => {
+    expect(parseBsdElapsedTime("  1:23  ")).toBe(83);
+  });
+
+  it("returns undefined for garbage", () => {
+    expect(parseBsdElapsedTime("")).toBeUndefined();
+    expect(parseBsdElapsedTime("keyword not found")).toBeUndefined();
+    expect(parseBsdElapsedTime("1:2:3:4")).toBeUndefined();
+    expect(parseBsdElapsedTime("1:")).toBeUndefined();
+    expect(parseBsdElapsedTime("-5")).toBeUndefined();
+    expect(parseBsdElapsedTime("3-")).toBeUndefined();
+    expect(parseBsdElapsedTime("3-5")).toBeUndefined(); // day prefix needs hh:mm:ss, not bare seconds
+    expect(parseBsdElapsedTime("1:23.5")).toBeUndefined();
   });
 });
