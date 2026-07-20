@@ -67,14 +67,32 @@ describe("renderMenu", () => {
     expect(text).toContain(
       "⛔ blk (b1) — Allow rm -rf? | shell=pi-presence-watch param0=focus param1=b1",
     );
+    // Resume dispatches through `pi-presence-watch resume` (which picks the
+    // terminal itself) rather than asking xbar to run `pi` inside Terminal.app.
     expect(text).toContain(
-      "-- Resume in Terminal | shell=pi param0=--session param1=/x/web.jsonl terminal=true",
+      "-- Resume in Terminal | shell=pi-presence-watch param0=resume param1=b1 param2=--pi-bin param3=pi terminal=false",
     );
   });
 
-  it("quotes a session file path with spaces in the resume action", () => {
-    const text = renderMenu(vm([session({ sessionFile: "/x/a b.jsonl" })])).join("\n");
-    expect(text).toContain('param1="/x/a b.jsonl" terminal=true');
+  it("routes Resume in Terminal through pi-presence-watch resume with the session id", () => {
+    const text = renderMenu(vm([session({ id: "abc123", sessionFile: "/x/web.jsonl" })])).join(
+      "\n",
+    );
+    expect(text).toContain(
+      "-- Resume in Terminal | shell=pi-presence-watch param0=resume param1=abc123 param2=--pi-bin param3=pi terminal=false",
+    );
+  });
+
+  it("quotes the pi-bin value in the resume action when it has spaces", () => {
+    const text = renderMenu(vm([session({ sessionFile: "/x/web.jsonl" })]), {
+      piBin: "/Users/a b/bin/pi",
+    }).join("\n");
+    expect(text).toContain('param3="/Users/a b/bin/pi" terminal=false');
+  });
+
+  it("omits Resume in Terminal when the session has no session file", () => {
+    const text = renderMenu(vm([session({ sessionFile: null })])).join("\n");
+    expect(text).not.toContain("Resume in Terminal");
   });
 
   it("renders an empty state", () => {
@@ -116,6 +134,35 @@ describe("renderMenu with resolved absolute bins", () => {
       piBin: "/Users/a b/bin/pi",
     }).join("\n");
     expect(text).toContain("shell=/opt/homebrew/bin/pi-presence-watch param0=focus");
-    expect(text).toContain('shell="/Users/a b/bin/pi" param0=--session');
+    // Resume shells out to the (absolute) watch bin too; the resolved pi bin
+    // travels through as --pi-bin so `pi-presence-watch resume` can launch it.
+    expect(text).toContain(
+      'shell=/opt/homebrew/bin/pi-presence-watch param0=resume param1=aaaaaa111111 param2=--pi-bin param3="/Users/a b/bin/pi" terminal=false',
+    );
+  });
+});
+
+describe("Prune sessions dormant >24h action", () => {
+  it("counts only dormant sessions past the 24h gc TTL, matching what gc actually prunes", () => {
+    const text = renderMenu(
+      vm([session({ id: "d1", state: "dormant", group: "dormant", updatedAt: 0 })]),
+    ).join("\n");
+    expect(text).toContain(
+      "Prune sessions dormant >24h (1) | shell=pi-presence-watch param0=gc terminal=false refresh=true",
+    );
+  });
+
+  it("excludes a dormant session that hasn't hit the 24h TTL yet", () => {
+    const text = renderMenu(
+      vm([
+        session({ id: "d1", state: "dormant", group: "dormant", updatedAt: Date.now() - 60_000 }),
+      ]),
+    ).join("\n");
+    expect(text).not.toContain("Prune sessions dormant");
+  });
+
+  it("hides the prune action when nothing is dormant", () => {
+    const text = renderMenu(vm([session({})])).join("\n");
+    expect(text).not.toContain("Prune sessions dormant");
   });
 });

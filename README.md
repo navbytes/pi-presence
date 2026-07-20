@@ -238,6 +238,28 @@ commands with the same events. Enable it explicitly:
 <sub>pi is [@earendil-works/pi](https://github.com/earendil-works/pi) by Mario
 Zechner; herdr is a third-party tool by [ogulcancelik](https://github.com/ogulcancelik/herdr).</sub>
 
+## Terminal selection for Resume
+
+Resuming a dead/dormant session opens a **new** terminal window — there's no
+existing tab to focus. macOS has no queryable system-wide "default terminal"
+setting (unlike a default browser or mail client), so readers pick one
+themselves, in order:
+
+1. **Explicit config** — the `PI_PRESENCE_TERMINAL` environment variable (in
+   the Vee plugin, its equivalent `<xbar.var>`, set via the plugin's Vee
+   settings), naming an app: `iTerm`, `Ghostty`, `Terminal`, or a bundle id.
+2. **The session's own recorded terminal** — its `terminal.tmuxPane` (resume
+   into that tmux session with `tmux new-window`) or, failing that,
+   `terminal.program` — so resume opens where the session actually lived.
+3. **Terminal.app**, with the resume command copied to the clipboard as a
+   last resort if even that fails (e.g. a denied Automation permission).
+
+Each app gets its own launch mechanism: Terminal.app and iTerm2 via
+`osascript` (`do script` / `create window with default profile` + `write
+text`), Ghostty via `open -na Ghostty.app --args -e` (it has no
+window-scripting CLI on macOS), and tmux via `tmux new-window`. See
+`packages/shared/src/launch.ts`.
+
 ## Development
 
 ```sh

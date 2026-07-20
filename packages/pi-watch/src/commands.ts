@@ -1,11 +1,17 @@
 import {
   type FocusPlan,
+  type LaunchCommand,
+  type TerminalKind,
   type ViewModel,
   type ViewSession,
   buildFocusPlan,
+  buildLaunchCommand,
   buildResumeCommand,
   copyToClipboard,
   executeFocus,
+  executeLaunch,
+  resolveLaunchTerminal,
+  resolveTmuxSession,
 } from "@pi-presence/shared";
 import { shortId } from "./render.js";
 
@@ -78,4 +84,63 @@ export function performFocus(session: ViewSession, deps: FocusDeps = {}): FocusO
   const focused = focusFn(plan);
   const copied = focused ? false : copyFn(resume);
   return { focused, strategy: plan.strategy, resume, copied };
+}
+
+export interface ResumeDeps {
+  executeLaunch?: (cmd: LaunchCommand) => boolean;
+  copyToClipboard?: (text: string) => boolean;
+  /** Resolves a recorded tmux pane to its session name. See launch.ts. */
+  resolveTmuxSession?: (pane: string) => string | null;
+  /** Defaults to `process.env`; read for `PI_PRESENCE_TERMINAL`. */
+  env?: NodeJS.ProcessEnv;
+}
+
+export interface ResumeOutcome {
+  launched: boolean;
+  kind: TerminalKind;
+  resume: string;
+  copied: boolean;
+}
+
+/**
+ * Open a dead/dormant session's terminal (the app that recorded it wrote, a
+ * PI_PRESENCE_TERMINAL override, or Terminal.app as the last resort) running
+ * `pi --session <file>`. Falls back to copying the resume command to the
+ * clipboard when nothing could be launched — same fallback shape as
+ * {@link performFocus}.
+ */
+export function performResume(
+  session: ViewSession,
+  piBin: string,
+  deps: ResumeDeps = {},
+): ResumeOutcome {
+  const launchFn = deps.executeLaunch ?? executeLaunch;
+  const copyFn = deps.copyToClipboard ?? copyToClipboard;
+  const resolveTmux = deps.resolveTmuxSession ?? resolveTmuxSession;
+  const env = deps.env ?? process.env;
+
+  const resumeCmd = buildResumeCommand({
+    sessionFile: session.sessionFile,
+    sessionId: session.id,
+    cwd: session.cwd,
+  });
+  const kind = resolveLaunchTerminal({
+    configured: env.PI_PRESENCE_TERMINAL,
+    recorded: session.terminal,
+  });
+  // `new-window -t` wants a session/window, not a pane — resolve the
+  // recorded pane first (falls back to the raw pane id, which then fails the
+  // same way tmux would have anyway, if resolution itself is unavailable).
+  const pane = session.terminal?.tmuxPane ?? null;
+  const tmuxTarget = kind === "tmux" && pane ? (resolveTmux(pane) ?? pane) : pane;
+  const launchCmd = buildLaunchCommand(kind, {
+    piBin,
+    args: resumeCmd.args,
+    cwd: resumeCmd.cwd,
+    tmuxTarget,
+  });
+
+  const launched = launchFn(launchCmd);
+  const copied = launched ? false : copyFn(resumeCmd.display);
+  return { launched, kind, resume: resumeCmd.display, copied };
 }

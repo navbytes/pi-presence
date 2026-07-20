@@ -34,6 +34,16 @@ cadence.
 - **Click a session → focus its terminal tab** (via `pi-presence-watch focus`, which falls back to copying the `pi --session …` resume command to the clipboard). Each session's submenu also has **Resume in Terminal** and **Open folder**.
 - Declares its capabilities to Vee via `<vee.exec>` / `<vee.filter>` / `<vee.shortcut>` tags, and enables the searchable filter panel (⌘⇧P).
 
+## Configuration
+
+- **`PI_PRESENCE_TERMINAL`** — which app **Resume in Terminal** opens (`iTerm`,
+  `Ghostty`, `Terminal`, or a bundle id). Set it via this plugin's `<xbar.var>`
+  in Vee's settings. Unset, resume opens the session's own recorded terminal,
+  falling back to Terminal.app — see [Terminal selection for
+  Resume](../../README.md#terminal-selection-for-resume) in the root README
+  for the full resolution order and why macOS needs this at all.
+- **`PI_PRESENCE_WATCH_BIN`** — see Troubleshooting below.
+
 ## Troubleshooting
 
 GUI apps like Vee run with a minimal `PATH` that usually omits the npm global

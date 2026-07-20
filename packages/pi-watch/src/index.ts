@@ -3,9 +3,10 @@ import {
   buildViewModel,
   getLiveDir,
   loadAllAndReconcile,
+  normalizeTerminalName,
   watchLive,
 } from "@pi-presence/shared";
-import { performFocus, resolveSession } from "./commands.js";
+import { performFocus, performResume, resolveSession } from "./commands.js";
 import { renderView } from "./render.js";
 
 // ---------------------------------------------------------------------------
@@ -15,6 +16,7 @@ import { renderView } from "./render.js";
 //   pi-watch --once           # print once and exit
 //   pi-watch --json           # stream view-model JSON
 //   pi-watch focus <query>    # focus a session's terminal (or copy its resume)
+//   pi-watch resume <query>   # open a new terminal running `pi --session ...`
 //   pi-watch gc [--all]       # prune dormant state files
 // ---------------------------------------------------------------------------
 
@@ -24,6 +26,8 @@ interface Options {
   color: boolean;
   all: boolean;
   dir: string;
+  /** Absolute (preferred) or bare path to `pi`, for `resume`. */
+  piBin: string;
 }
 
 function parseOptions(argv: string[]): Options {
@@ -33,9 +37,12 @@ function parseOptions(argv: string[]): Options {
     color: !argv.includes("--no-color") && Boolean(process.stdout.isTTY),
     all: argv.includes("--all"),
     dir: getLiveDir(),
+    piBin: "pi",
   };
   const dirIdx = argv.indexOf("--dir");
   if (dirIdx >= 0 && argv[dirIdx + 1]) opts.dir = argv[dirIdx + 1] as string;
+  const piBinIdx = argv.indexOf("--pi-bin");
+  if (piBinIdx >= 0 && argv[piBinIdx + 1]) opts.piBin = argv[piBinIdx + 1] as string;
   return opts;
 }
 
@@ -43,7 +50,7 @@ function positionals(argv: string[]): string[] {
   const out: string[] = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i] as string;
-    if (a === "--dir") {
+    if (a === "--dir" || a === "--pi-bin") {
       i++; // skip its value
       continue;
     }
@@ -78,6 +85,37 @@ function runFocus(query: string, opts: Options): number {
     );
   } else {
     process.stdout.write(`could not focus. resume with:\n  ${outcome.resume}\n`);
+  }
+  return 0;
+}
+
+function runResume(query: string, opts: Options): number {
+  const vm = buildViewModel(loadAllAndReconcile(opts.dir));
+  const res = resolveSession(vm, query);
+  if (res.kind === "none") {
+    process.stderr.write(`no session matching "${query}"\n`);
+    return 1;
+  }
+  if (res.kind === "ambiguous") {
+    process.stderr.write(`"${query}" matches multiple sessions:\n`);
+    for (const s of res.matches) process.stderr.write(`  ${s.name}  #${s.id}  ${s.cwd}\n`);
+    return 1;
+  }
+  const outcome = performResume(res.session, opts.piBin);
+  const configuredTerminal = process.env.PI_PRESENCE_TERMINAL;
+  if (configuredTerminal && !normalizeTerminalName(configuredTerminal)) {
+    process.stderr.write(
+      `PI_PRESENCE_TERMINAL=${configuredTerminal} not recognized (expected iterm2|ghostty|terminal); using ${outcome.kind}\n`,
+    );
+  }
+  if (outcome.launched) {
+    process.stdout.write(`resuming ${res.session.name} in ${outcome.kind}\n`);
+  } else if (outcome.copied) {
+    process.stdout.write(
+      `could not open a terminal; copied resume command to clipboard:\n  ${outcome.resume}\n`,
+    );
+  } else {
+    process.stdout.write(`could not open a terminal. resume with:\n  ${outcome.resume}\n`);
   }
   return 0;
 }
@@ -129,6 +167,10 @@ function main(): void {
   if (command === "focus") {
     const query = positionals(argv).slice(1).join(" ");
     process.exit(runFocus(query, opts));
+  }
+  if (command === "resume") {
+    const query = positionals(argv).slice(1).join(" ");
+    process.exit(runResume(query, opts));
   }
   if (command === "gc") {
     process.exit(runGc(opts));
