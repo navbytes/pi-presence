@@ -152,7 +152,7 @@ describe("performResume", () => {
       { executeLaunch, resolveTmuxSession, env: {} },
     );
     expect(out.kind).toBe("tmux");
-    expect(resolveTmuxSession).toHaveBeenCalledWith("%4");
+    expect(resolveTmuxSession).toHaveBeenCalledWith("%4", null);
     const cmd = executeLaunch.mock.calls[0]?.[0];
     expect(cmd?.args).toEqual([
       "new-window",
@@ -173,5 +173,21 @@ describe("performResume", () => {
     );
     const cmd = executeLaunch.mock.calls[0]?.[0];
     expect(cmd?.args).toContain("%9");
+  });
+
+  it("forwards the recorded tmux socket (from terminal.tmux) to resolution and the launch command", () => {
+    const executeLaunch = vi.fn((_cmd: LaunchCommand) => true);
+    const resolveTmuxSession = vi.fn(() => "work");
+    performResume(
+      session({
+        sessionFile: "/x/s.jsonl",
+        terminal: { program: "iTerm.app", tmuxPane: "%4", tmux: "/tmp/tmux-1000/default,1234,0" },
+      }),
+      "pi",
+      { executeLaunch, resolveTmuxSession, env: {} },
+    );
+    expect(resolveTmuxSession).toHaveBeenCalledWith("%4", "/tmp/tmux-1000/default");
+    const cmd = executeLaunch.mock.calls[0]?.[0];
+    expect(cmd?.args.slice(0, 2)).toEqual(["-S", "/tmp/tmux-1000/default"]);
   });
 });

@@ -40,11 +40,14 @@ export interface ReconcileDeps {
 }
 
 export interface ReconcileOptions extends ReconcileDeps {
-  /**
-   * Delete dead files older than this many ms. `0`/`undefined` disables
-   * deletion (dead files are still returned so the reader can show/hide them).
-   */
+  /** Delete dead files older than this many ms. Only consulted when `prune` is true. */
   gcTtlMs?: number;
+  /**
+   * Actually unlink dead files past `gcTtlMs`. Defaults to `false`: reading
+   * (once/json/live/focus) must never mutate disk — dead files are still
+   * returned, just not deleted. Only the explicit `gc` command opts in.
+   */
+  prune?: boolean;
 }
 
 /** Parse + validate a single state file's raw JSON text. Returns null on any problem. */
@@ -98,6 +101,7 @@ export function loadAllAndReconcile(dir: string, opts: ReconcileOptions = {}): S
   const readFile = opts.readFile ?? ((p: string) => fsReadFileSync(p, "utf8"));
   const unlink = opts.unlink ?? ((p: string) => fsUnlinkSync(p));
   const gcTtlMs = opts.gcTtlMs ?? 0;
+  const prune = opts.prune ?? false;
 
   let entries: string[];
   try {
@@ -128,7 +132,7 @@ export function loadAllAndReconcile(dir: string, opts: ReconcileOptions = {}): S
     const ageMs = Math.max(0, nowMs - file.updatedAt);
     const dead = liveness !== "alive";
 
-    if (dead && gcTtlMs > 0 && ageMs > gcTtlMs) {
+    if (dead && prune && gcTtlMs > 0 && ageMs > gcTtlMs) {
       try {
         unlink(path);
       } catch {

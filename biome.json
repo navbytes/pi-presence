@@ -49,7 +49,7 @@
   },
   "overrides": [
     {
-      "include": ["packages/pi-presence/src/osc-title.ts"],
+      "include": ["packages/pi-presence/src/osc-title.ts", "packages/pi-watch/src/render.ts"],
       "linter": {
         "rules": {
           "suspicious": {

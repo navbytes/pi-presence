@@ -90,22 +90,32 @@ describe("loadAllAndReconcile", () => {
     expect(snaps.map((s) => s.file.sessionId).sort()).toEqual(["alive", "dead"]);
   });
 
-  it("garbage-collects dead files older than the TTL", () => {
+  it("never deletes on disk unless prune is explicitly requested (D4: read paths must not mutate)", () => {
     const unlink = vi.fn();
+    // gcTtlMs alone (no `prune: true`) must not delete anything — this is what
+    // --once/--json/live/focus pass (or omit); only `gc` sets prune:true.
     const snaps = loadAllAndReconcile("/live", { ...baseDeps, unlink, gcTtlMs: 1000 });
+    expect(unlink).not.toHaveBeenCalled();
+    expect(snaps.map((s) => s.file.sessionId).sort()).toEqual(["alive", "dead"]);
+  });
+
+  it("garbage-collects dead files older than the TTL when prune:true", () => {
+    const unlink = vi.fn();
+    const snaps = loadAllAndReconcile("/live", { ...baseDeps, unlink, gcTtlMs: 1000, prune: true });
     // dead.json age is 9900 > 1000 -> deleted; alive.json stays.
     expect(unlink).toHaveBeenCalledTimes(1);
     expect(unlink).toHaveBeenCalledWith("/live/dead.json");
     expect(snaps.map((s) => s.file.sessionId)).toEqual(["alive"]);
   });
 
-  it("does not GC live files even if old", () => {
+  it("does not GC live files even if old, even when prune:true", () => {
     const unlink = vi.fn();
     loadAllAndReconcile("/live", {
       ...baseDeps,
       isAlive: () => "alive",
       unlink,
       gcTtlMs: 1,
+      prune: true,
     });
     expect(unlink).not.toHaveBeenCalled();
   });

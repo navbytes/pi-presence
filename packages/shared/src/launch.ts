@@ -63,6 +63,8 @@ export interface LaunchTarget {
   cwd?: string | null;
   /** `terminal.tmuxPane`, used as the tmux `-t` target. */
   tmuxTarget?: string | null;
+  /** Socket path parsed from `terminal.tmux` ($TMUX), used as `-S <path>`. */
+  tmuxSocket?: string | null;
 }
 
 /** A single command to spawn. Mirrors focus.ts's `FocusCommand` shape. */
@@ -148,7 +150,10 @@ export function buildLaunchCommand(kind: TerminalKind, target: LaunchTarget): La
       return { file: "open", args, description: "Ghostty: open -na --args -e (new window)" };
     }
     case "tmux": {
-      const args = ["new-window"];
+      // `-S <socket>` is a global tmux option and must precede the subcommand.
+      const args: string[] = [];
+      if (target.tmuxSocket) args.push("-S", target.tmuxSocket);
+      args.push("new-window");
       if (target.tmuxTarget) args.push("-t", target.tmuxTarget);
       if (target.cwd) args.push("-c", target.cwd);
       args.push(buildPiCommand(target));
@@ -183,12 +188,20 @@ function defaultCapture(file: string, args: string[]): string {
  * tmux 3.5a) — so a raw recorded pane id has to be resolved to a session
  * first. Best-effort: returns null if tmux or the pane is gone; the caller
  * should fall back to the raw pane id (which will then fail the same way,
- * cleanly) or to no `-t` at all.
+ * cleanly) or to no `-t` at all. `socket` (from `terminal.tmux`, the
+ * recorded $TMUX) targets a non-default server, e.g. after a reboot dropped
+ * the default socket but a custom one (tmux -L/-S) is still running.
  */
-export function resolveTmuxSession(pane: string, deps: ResolveTmuxSessionDeps = {}): string | null {
+export function resolveTmuxSession(
+  pane: string,
+  socket?: string | null,
+  deps: ResolveTmuxSessionDeps = {},
+): string | null {
   const run = deps.run ?? defaultCapture;
+  const args = socket ? ["-S", socket] : [];
+  args.push("display-message", "-p", "-t", pane, "#{session_name}");
   try {
-    const name = run("tmux", ["display-message", "-p", "-t", pane, "#{session_name}"]).trim();
+    const name = run("tmux", args).trim();
     return name || null;
   } catch {
     return null;
