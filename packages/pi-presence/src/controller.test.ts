@@ -204,16 +204,23 @@ describe("PresenceController", () => {
     expect(idleChange.workingMs).toBe(250);
   });
 
-  it("unlinks only on quit shutdown", () => {
+  it("unlinks on every shutdown reason (a following session_start rewrites the file)", () => {
     const c = makeController();
     c.start(makeIdentity());
     c.shutdown("reload");
-    expect(unlinked).toHaveLength(0);
-    expect(c.sessionId).toBe("sess-1"); // file kept, process survives
-
-    c.shutdown("quit");
     expect(unlinked).toEqual(["sess-1"]);
     expect(c.sessionId).toBeUndefined();
+
+    c.start(makeIdentity({ sessionId: "sess-2" }));
+    c.shutdown("quit");
+    expect(unlinked).toEqual(["sess-1", "sess-2"]);
+    expect(c.sessionId).toBeUndefined();
+
+    for (const reason of ["new", "resume", "fork"] as const) {
+      c.start(makeIdentity({ sessionId: `sess-${reason}` }));
+      c.shutdown(reason);
+    }
+    expect(unlinked).toEqual(["sess-1", "sess-2", "sess-new", "sess-resume", "sess-fork"]);
   });
 
   it("ignores events after a quit teardown", () => {
@@ -252,5 +259,40 @@ describe("PresenceController", () => {
     c.agentStart();
     c.agentSettled();
     expect(setTimer).toHaveBeenCalled();
+  });
+
+  it("cancelPendingIdle cancels a scheduled settle without changing state (e.g. before_agent_start)", () => {
+    const c = makeController();
+    c.start(makeIdentity());
+    c.agentStart();
+    c.agentSettled(); // schedules the 250ms idle-debounce timer
+    c.cancelPendingIdle();
+    sched.advance(5000);
+    expect(c.currentState).toBe("working"); // never settled; the timer was cancelled
+  });
+
+  it("cancelPendingIdle is a no-op when nothing is pending", () => {
+    const c = makeController();
+    c.start(makeIdentity());
+    expect(() => c.cancelPendingIdle()).not.toThrow();
+    expect(c.currentState).toBe("idle");
+  });
+
+  it("refreshes the session name from deps.getSessionName on every write (renames have no event)", () => {
+    let name = "first";
+    const c = makeController({ getSessionName: () => name });
+    c.start(makeIdentity({ sessionName: "demo" }));
+    expect(writes.at(-1)?.sessionName).toBe("first"); // pulled immediately, even on start()'s own write
+
+    name = "renamed";
+    c.agentStart(); // any subsequent write re-pulls the current name
+    expect(writes.at(-1)?.sessionName).toBe("renamed");
+    expect(titles.at(-1)).toContain("renamed"); // the title reflects it too, not just the file
+  });
+
+  it("keeps the identity's own sessionName when deps.getSessionName is not provided", () => {
+    const c = makeController(); // no getSessionName override (default deps)
+    c.start(makeIdentity({ sessionName: "demo" }));
+    expect(writes.at(-1)?.sessionName).toBe("demo");
   });
 });
