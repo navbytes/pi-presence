@@ -1,0 +1,23 @@
+version: 2
+updates:
+- package-ecosystem: github-actions
+  directories:
+  - /
+  patterns:
+  - '*'
+  multi-ecosystem-group: routine
+- package-ecosystem: npm
+  directories:
+  - /
+  - /packages/pi-presence
+  - /packages/pi-watch
+  - /packages/shared
+  - /packages/vee-plugin
+  patterns:
+  - '*'
+  multi-ecosystem-group: routine
+multi-ecosystem-groups:
+  routine:
+    schedule:
+      interval: weekly
+      day: monday
